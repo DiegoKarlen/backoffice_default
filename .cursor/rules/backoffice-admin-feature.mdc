@@ -1,0 +1,24 @@
+---
+description: Añadir o modificar pantallas de administración del backoffice 2026 (HTML, Shell, admin-pages, i18n, responsive).
+globs: backoffice/src/admin-*.html,backoffice/src/assets/scripts/2026/admin-pages.js,backoffice/src/assets/scripts/2026/Shell.js,backoffice/src/assets/scripts/2026/bo-i18n.js,backoffice/src/assets/scripts/2026/locales/*.js,backoffice/src/assets/styles/2026/_responsive.scss,backoffice/src/assets/styles/2026/_shell.scss,backoffice/src/assets/styles/2026/_components.scss
+alwaysApply: false
+---
+
+# Backoffice — nuevas pantallas de administración
+
+**Referencia completa:** `docs/backoffice-new-admin-feature.md`
+
+## Resumen para implementar
+
+1. **HTML** (`admin-<nombre>.html`): `data-bo-page`, `data-active`; shell con `main.content`; card lista + paneles; `data-i18n`; formularios con `bo-form-profile` si aplica.
+2. **Shell.js**: nuevo ítem en `NAV` (`href`, `key`, `textKey`, `func` opcional).
+3. **admin-pages.js**: init, permisos, API, patrones de lista/pickers como en users/roles.
+4. **locales** `en.js` / `es.js` + migas en **bo-i18n** si hace falta nuevo `data-bo-page`.
+5. **Build:** `cd backoffice && npm run build`.
+
+## Responsive (no romper)
+
+- **≤1100px:** drawer + hamburguesa (sin barra solo-iconos). Shell una columna; aside `fixed`; no dar al botón primario de `.card-head` ancho 100% — compacto, `align-self: flex-end`, `width: auto` (ver `_responsive.scss`).
+- Grid shell: columnas con **`minmax(0, 1fr)`**; `.d-sidebar` con **`min-width: 0`**.
+
+Ante dudas de flujo o convenciones, seguir primero una página existente (`admin-users.html`, `admin-roles.html`) y la guía en `docs/`.

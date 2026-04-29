@@ -1,5 +1,5 @@
 /* ============ CONTENT + COMMON COMPONENTS ============ */
-.content { padding: 32px 32px 24px; width: 100%; }
+.content { padding: 32px 32px 24px; width: 100%; min-width: 0; max-width: 100%; }
 
 /* Hero */
 .hero {
@@ -69,8 +69,13 @@
 .card-head > .btn:last-child {
   flex-shrink: 0;
 }
-.card-title-wrap { min-width: 0; }
-.card-title-wrap .eyebrow { display: block; margin-bottom: 4px; }
+.card-title-wrap { min-width: 0; flex: 1 1 auto; }
+.card-title-wrap .eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
 .card-title {
   font-family: 'Inter Tight', 'Inter', sans-serif;
   font-weight: 700;
@@ -78,6 +83,8 @@
   letter-spacing: -0.02em;
   color: var(--t-base);
   margin: 0;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .card-action {
