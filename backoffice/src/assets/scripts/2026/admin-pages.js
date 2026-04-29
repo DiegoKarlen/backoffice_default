@@ -121,6 +121,270 @@ function initSignin() {
 
 /* --- Users --- */
 
+function showUsersListView() {
+  const list = document.getElementById("bo-users-list-view");
+  const create = document.getElementById("bo-user-create-panel");
+  const edit = document.getElementById("bo-user-edit-panel");
+  if (list) list.hidden = false;
+  if (create) create.hidden = true;
+  if (edit) edit.hidden = true;
+}
+
+function showUsersCreateView() {
+  const list = document.getElementById("bo-users-list-view");
+  const create = document.getElementById("bo-user-create-panel");
+  const edit = document.getElementById("bo-user-edit-panel");
+  if (list) list.hidden = true;
+  if (create) create.hidden = false;
+  if (edit) edit.hidden = true;
+}
+
+function showUsersEditView() {
+  const list = document.getElementById("bo-users-list-view");
+  const create = document.getElementById("bo-user-create-panel");
+  const edit = document.getElementById("bo-user-edit-panel");
+  if (list) list.hidden = true;
+  if (create) create.hidden = true;
+  if (edit) edit.hidden = false;
+}
+
+function showRolesListView() {
+  const list = document.getElementById("bo-roles-list-view");
+  const create = document.getElementById("bo-role-create-panel");
+  const edit = document.getElementById("bo-role-edit-panel");
+  if (list) list.hidden = false;
+  if (create) create.hidden = true;
+  if (edit) edit.hidden = true;
+}
+
+function showRolesCreateView() {
+  const list = document.getElementById("bo-roles-list-view");
+  const create = document.getElementById("bo-role-create-panel");
+  const edit = document.getElementById("bo-role-edit-panel");
+  if (list) list.hidden = true;
+  if (create) create.hidden = false;
+  if (edit) edit.hidden = true;
+}
+
+function showRolesEditView() {
+  const list = document.getElementById("bo-roles-list-view");
+  const create = document.getElementById("bo-role-create-panel");
+  const edit = document.getElementById("bo-role-edit-panel");
+  if (list) list.hidden = true;
+  if (create) create.hidden = true;
+  if (edit) edit.hidden = false;
+}
+
+function showFuncListView() {
+  const list = document.getElementById("bo-func-list-view");
+  const create = document.getElementById("bo-func-create-panel");
+  const edit = document.getElementById("bo-func-edit-panel");
+  if (list) list.hidden = false;
+  if (create) create.hidden = true;
+  if (edit) edit.hidden = true;
+}
+
+function showFuncCreateView() {
+  const list = document.getElementById("bo-func-list-view");
+  const create = document.getElementById("bo-func-create-panel");
+  const edit = document.getElementById("bo-func-edit-panel");
+  if (list) list.hidden = true;
+  if (create) create.hidden = false;
+  if (edit) edit.hidden = true;
+}
+
+function showFuncEditView() {
+  const list = document.getElementById("bo-func-list-view");
+  const create = document.getElementById("bo-func-create-panel");
+  const edit = document.getElementById("bo-func-edit-panel");
+  if (list) list.hidden = true;
+  if (create) create.hidden = true;
+  if (edit) edit.hidden = false;
+}
+
+/** @type {{ getSelectedIds: () => string[], setSelectedIds: (ids: string[]) => void, destroy: () => void } | null} */
+let createUserRolePickerApi = null;
+/** @type {{ getSelectedIds: () => string[], setSelectedIds: (ids: string[]) => void, destroy: () => void } | null} */
+let editUserRolePickerApi = null;
+/** @type {{ getSelectedIds: () => string[], setSelectedIds: (ids: string[]) => void, destroy: () => void } | null} */
+let createRoleFuncPickerApi = null;
+/** @type {{ getSelectedIds: () => string[], setSelectedIds: (ids: string[]) => void, destroy: () => void } | null} */
+let editRoleFuncPickerApi = null;
+
+/**
+ * Chip + search picker (shared UX: users→roles and roles→functionalities).
+ * @param {HTMLElement} hostEl
+ * @param {Array<{ id: string, code: string, name: string, module?: string | null }>} items
+ * @param {string[]} initialIds
+ * @param {{ placeholder: string, emptyHint: string, removeAria: string }} labels
+ */
+function mountItemPicker(hostEl, items, initialIds = [], labels) {
+  const selected = new Set((initialIds || []).map((id) => String(id)));
+
+  hostEl.innerHTML = `
+    <div class="bo-role-picker">
+      <div class="bo-role-picker-chips" aria-live="polite"></div>
+      <div class="bo-role-picker-field">
+        <input type="search" class="input input--underline bo-role-picker-search" autocomplete="off" spellcheck="false"
+          placeholder="${esc(labels.placeholder)}" />
+        <ul class="bo-role-picker-dropdown" role="listbox" hidden></ul>
+      </div>
+    </div>
+  `;
+
+  const chipsEl = hostEl.querySelector(".bo-role-picker-chips");
+  const searchEl = /** @type {HTMLInputElement} */ (hostEl.querySelector(".bo-role-picker-search"));
+  const dropEl = hostEl.querySelector(".bo-role-picker-dropdown");
+  if (!chipsEl || !searchEl || !dropEl) {
+    return {
+      getSelectedIds: () => [],
+      setSelectedIds: () => {},
+      destroy: () => {
+        hostEl.innerHTML = "";
+      },
+    };
+  }
+
+  function itemById(id) {
+    return items.find((x) => String(x.id) === String(id));
+  }
+
+  function renderChips() {
+    const ids = [...selected];
+    if (ids.length === 0) {
+      chipsEl.innerHTML = `<p class="bo-role-picker-empty">${esc(labels.emptyHint)}</p>`;
+      return;
+    }
+    chipsEl.innerHTML = ids
+      .map((id) => {
+        const r = itemById(id);
+        if (!r) return "";
+        const rid = esc(String(id));
+        return `<span class="tag t-info bo-role-chip" data-pick-id="${rid}">
+          <span>${esc(r.code)} — ${esc(r.name)}</span>
+          <button type="button" class="bo-role-chip-remove" data-pick-id="${rid}" aria-label="${esc(labels.removeAria)}">×</button>
+        </span>`;
+      })
+      .join("");
+    chipsEl.querySelectorAll(".bo-role-chip-remove").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selected.delete(btn.getAttribute("data-pick-id"));
+        renderChips();
+        renderDropdown();
+      });
+    });
+  }
+
+  function filterAvailable(query) {
+    const q = (query || "").trim().toLowerCase();
+    let available = items.filter((r) => !selected.has(String(r.id)));
+    available = [...available].sort((a, b) => String(a.code).localeCompare(String(b.code)));
+    if (!q) return available;
+    return available.filter((r) => {
+      const parts = [r.code, r.name, r.module].filter(Boolean).map((x) => String(x).toLowerCase());
+      return parts.some((p) => p.includes(q));
+    });
+  }
+
+  function renderDropdown() {
+    const rows = filterAvailable(searchEl.value).slice(0, 15);
+    dropEl.innerHTML = rows
+      .map(
+        (r) =>
+          `<li role="presentation"><button type="button" class="bo-role-picker-option" role="option" data-pick-id="${esc(String(r.id))}">${esc(r.code)} — ${esc(r.name)}</button></li>`,
+      )
+      .join("");
+    dropEl.hidden = rows.length === 0;
+  }
+
+  /** @param {MouseEvent} ev */
+  function onDocClick(ev) {
+    if (!hostEl.contains(/** @type {Node} */ (ev.target))) dropEl.hidden = true;
+  }
+
+  document.addEventListener("click", onDocClick);
+
+  searchEl.addEventListener("input", () => renderDropdown());
+  searchEl.addEventListener("focus", () => renderDropdown());
+  searchEl.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") dropEl.hidden = true;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+
+  dropEl.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".bo-role-picker-option")) e.preventDefault();
+  });
+  dropEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".bo-role-picker-option");
+    if (!btn) return;
+    const pid = btn.getAttribute("data-pick-id");
+    if (pid) selected.add(pid);
+    searchEl.value = "";
+    renderChips();
+    renderDropdown();
+    searchEl.focus();
+  });
+
+  renderChips();
+  renderDropdown();
+
+  return {
+    getSelectedIds: () => [...selected].map(String),
+    setSelectedIds: (ids) => {
+      selected.clear();
+      (ids || []).forEach((id) => selected.add(String(id)));
+      renderChips();
+      renderDropdown();
+    },
+    destroy: () => {
+      document.removeEventListener("click", onDocClick);
+      hostEl.innerHTML = "";
+    },
+  };
+}
+
+/**
+ * Buscar roles y asignarlos como chips (crear / editar usuario).
+ * @param {HTMLElement} hostEl
+ * @param {Array<{ id: string, code: string, name: string }>} allRoles
+ * @param {string[]} initialIds
+ */
+function mountRolePicker(hostEl, allRoles, initialIds = []) {
+  return mountItemPicker(hostEl, allRoles, initialIds, {
+    placeholder: t("users.searchRoles"),
+    emptyHint: t("users.noRolesYet"),
+    removeAria: t("users.removeRole"),
+  });
+}
+
+/**
+ * Buscar funcionalidades y asignarlas como chips (crear / editar rol).
+ */
+function mountFunctionalityPicker(hostEl, allFunctionalities, initialIds = []) {
+  return mountItemPicker(hostEl, allFunctionalities, initialIds, {
+    placeholder: t("roles.searchFuncs"),
+    emptyHint: t("roles.noFuncsYet"),
+    removeAria: t("roles.removeFunc"),
+  });
+}
+
+function destroyRoleFuncPickers() {
+  createRoleFuncPickerApi?.destroy();
+  createRoleFuncPickerApi = null;
+  editRoleFuncPickerApi?.destroy();
+  editRoleFuncPickerApi = null;
+}
+
+function destroyUserRolePickers() {
+  createUserRolePickerApi?.destroy();
+  createUserRolePickerApi = null;
+  editUserRolePickerApi?.destroy();
+  editUserRolePickerApi = null;
+}
+
 async function renderUsersTable(tbody) {
   const { users } = await api.users.list();
   tbody.innerHTML = users
@@ -146,39 +410,31 @@ async function renderUsersTable(tbody) {
   });
 }
 
-function roleCheckboxHtml(roles, selectedIds) {
-  const sel = new Set(selectedIds || []);
-  return roles
-    .map(
-      (r) => `
-    <label class="check" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <input type="checkbox" name="role" value="${r.id}" ${sel.has(r.id) ? "checked" : ""}>
-      <span class="box"></span>
-      <span>${esc(r.code)} — ${esc(r.name)}</span>
-    </label>`
-    )
-    .join("");
-}
-
 let editUserPanel = null;
 
 function openUserEditor(user) {
-  if (!editUserPanel) return;
-  editUserPanel.dataset.userId = user.id;
-  const heading = editUserPanel.querySelector("#bo-user-edit-heading");
+  const panel = document.getElementById("bo-user-edit-panel");
+  if (!panel) return;
+  panel.dataset.userId = user.id;
+  const heading = panel.querySelector("#bo-user-edit-heading");
   if (heading) heading.textContent = t("usersExtra.editTitlePrefix");
-  editUserPanel.querySelector("#edit-email").textContent = user.email;
-  editUserPanel.querySelector("#edit-displayName").value = user.displayName || "";
-  editUserPanel.querySelector("#edit-active").checked = !!user.active;
-  editUserPanel.querySelector("#edit-password").value = "";
+  const emailEl = /** @type {HTMLInputElement | null} */ (panel.querySelector("#edit-email"));
+  if (emailEl) emailEl.value = user.email || "";
+  panel.querySelector("#edit-displayName").value = user.displayName || "";
+  panel.querySelector("#edit-active").checked = !!user.active;
+  panel.querySelector("#edit-password").value = "";
   const roles = window.__boRolesList || [];
-  const holder = editUserPanel.querySelector("#edit-roles");
-  holder.innerHTML = roleCheckboxHtml(
-    roles,
-    user.roles.map((r) => r.id)
-  );
-  editUserPanel.hidden = false;
-  editUserPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const holder = panel.querySelector("#edit-roles");
+  editUserRolePickerApi?.destroy();
+  editUserRolePickerApi = null;
+  if (holder) {
+    editUserRolePickerApi = mountRolePicker(
+      holder,
+      roles,
+      user.roles.map((r) => r.id),
+    );
+  }
+  showUsersEditView();
 }
 
 async function initUsersPage() {
@@ -197,8 +453,9 @@ async function initUsersPage() {
     const r = await api.roles.list();
     roles = r.roles;
     window.__boRolesList = roles;
+    destroyUserRolePickers();
     const holder = document.getElementById("create-roles");
-    if (holder) holder.innerHTML = roleCheckboxHtml(roles, []);
+    if (holder) createUserRolePickerApi = mountRolePicker(holder, roles, []);
   } catch (e) {
     showToast(msg, e.message, true);
     return;
@@ -211,51 +468,82 @@ async function initUsersPage() {
     return;
   }
 
-  form?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    msg.style.display = "none";
-    const email = document.getElementById("create-email")?.value?.trim();
-    const password = document.getElementById("create-password")?.value;
-    const displayName = document.getElementById("create-displayName")?.value?.trim();
-    const active = document.getElementById("create-active")?.checked ?? true;
-    const roleIds = Array.from(form.querySelectorAll('input[name="role"]:checked')).map((i) => i.value);
-    try {
-      await api.users.create({ email, password, displayName: displayName || undefined, active, roleIds });
-      form.reset();
-      const cr = document.getElementById("create-roles");
-      if (cr) cr.innerHTML = roleCheckboxHtml(roles, []);
-      await renderUsersTable(tbody);
-      showToast(msg, t("users.msgCreated"), false);
-    } catch (ex) {
-      showToast(msg, ex.message, true);
-    }
-  });
+  showUsersListView();
 
-  document.getElementById("bo-user-edit-cancel")?.addEventListener("click", () => {
-    if (editUserPanel) editUserPanel.hidden = true;
-  });
+  const btnNew = document.getElementById("bo-users-btn-new");
+  if (btnNew && !btnNew.dataset.boWired) {
+    btnNew.dataset.boWired = "1";
+    btnNew.addEventListener("click", () => {
+      showUsersCreateView();
+      form?.reset();
+      createUserRolePickerApi?.setSelectedIds([]);
+      const ca = document.getElementById("create-active");
+      if (ca) ca.checked = true;
+    });
+  }
 
-  document.getElementById("bo-user-edit-save")?.addEventListener("click", async () => {
-    msg.style.display = "none";
-    const id = editUserPanel?.dataset?.userId;
-    if (!id) return;
-    const displayName = editUserPanel.querySelector("#edit-displayName")?.value?.trim();
-    const active = editUserPanel.querySelector("#edit-active")?.checked;
-    const password = editUserPanel.querySelector("#edit-password")?.value;
-    const roleIds = Array.from(
-      editUserPanel.querySelectorAll('input[name="role"]:checked')
-    ).map((i) => i.value);
-    const body = { displayName: displayName || null, active, roleIds };
-    if (password && password.length >= 8) body.password = password;
-    try {
-      await api.users.patch(id, body);
-      editUserPanel.hidden = true;
-      await renderUsersTable(tbody);
-      showToast(msg, t("users.msgSaved"), false);
-    } catch (ex) {
-      showToast(msg, ex.message, true);
-    }
-  });
+  const cancelCreate = document.getElementById("bo-user-create-cancel");
+  if (cancelCreate && !cancelCreate.dataset.boWired) {
+    cancelCreate.dataset.boWired = "1";
+    cancelCreate.addEventListener("click", () => {
+      showUsersListView();
+    });
+  }
+
+  if (form && !form.dataset.boSubmitWired) {
+    form.dataset.boSubmitWired = "1";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.style.display = "none";
+      const email = document.getElementById("create-email")?.value?.trim();
+      const password = document.getElementById("create-password")?.value;
+      const displayName = document.getElementById("create-displayName")?.value?.trim();
+      const active = document.getElementById("create-active")?.checked ?? true;
+      const roleIds = createUserRolePickerApi?.getSelectedIds() ?? [];
+      try {
+        await api.users.create({ email, password, displayName: displayName || undefined, active, roleIds });
+        form.reset();
+        createUserRolePickerApi?.setSelectedIds([]);
+        await renderUsersTable(tbody);
+        showToast(msg, t("users.msgCreated"), false);
+        showUsersListView();
+      } catch (ex) {
+        showToast(msg, ex.message, true);
+      }
+    });
+  }
+
+  const editCancel = document.getElementById("bo-user-edit-cancel");
+  if (editCancel && !editCancel.dataset.boWired) {
+    editCancel.dataset.boWired = "1";
+    editCancel.addEventListener("click", () => {
+      showUsersListView();
+    });
+  }
+
+  const editSave = document.getElementById("bo-user-edit-save");
+  if (editSave && !editSave.dataset.boWired) {
+    editSave.dataset.boWired = "1";
+    editSave.addEventListener("click", async () => {
+      msg.style.display = "none";
+      const id = editUserPanel?.dataset?.userId;
+      if (!id) return;
+      const displayName = editUserPanel.querySelector("#edit-displayName")?.value?.trim();
+      const active = editUserPanel.querySelector("#edit-active")?.checked;
+      const password = editUserPanel.querySelector("#edit-password")?.value;
+      const roleIds = editUserRolePickerApi?.getSelectedIds() ?? [];
+      const body = { displayName: displayName || null, active, roleIds };
+      if (password && password.length >= 8) body.password = password;
+      try {
+        await api.users.patch(id, body);
+        await renderUsersTable(tbody);
+        showToast(msg, t("users.msgSaved"), false);
+        showUsersListView();
+      } catch (ex) {
+        showToast(msg, ex.message, true);
+      }
+    });
+  }
 }
 
 /* --- Roles --- */
@@ -285,35 +573,25 @@ async function renderRolesTable(tbody, functionalities) {
   });
 }
 
-function functionalityCheckboxHtml(functionalities, selectedIds) {
-  const sel = new Set(selectedIds || []);
-  return functionalities
-    .map(
-      (f) => `
-    <label class="check" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <input type="checkbox" name="func" value="${f.id}" ${sel.has(f.id) ? "checked" : ""}>
-      <span class="box"></span>
-      <span>${esc(f.code)} — ${esc(f.name)}</span>
-    </label>`
-    )
-    .join("");
-}
-
 let editRolePanel = null;
 
 function openRoleEditor(role, functionalities) {
   if (!editRolePanel) return;
   editRolePanel.dataset.roleId = role.id;
   const rh = editRolePanel.querySelector("#bo-role-edit-heading");
-  if (rh) rh.textContent = t("rolesExtra.editHeading");
-  editRolePanel.querySelector("#edit-role-code").textContent = role.code;
+  if (rh) rh.textContent = t("rolesExtra.editTitlePrefix");
+  const codeEl = editRolePanel.querySelector("#edit-role-code-display");
+  if (codeEl) codeEl.value = role.code || "";
   editRolePanel.querySelector("#edit-role-name").value = role.name;
   editRolePanel.querySelector("#edit-role-desc").value = role.description || "";
+  editRoleFuncPickerApi?.destroy();
+  editRoleFuncPickerApi = null;
   const holder = editRolePanel.querySelector("#edit-role-funcs");
   const ids = role.functionalities.map((f) => f.id);
-  holder.innerHTML = functionalityCheckboxHtml(functionalities, ids);
-  editRolePanel.hidden = false;
-  editRolePanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (holder) {
+    editRoleFuncPickerApi = mountFunctionalityPicker(holder, functionalities, ids);
+  }
+  showRolesEditView();
 }
 
 async function initRolesPage() {
@@ -331,8 +609,9 @@ async function initRolesPage() {
   try {
     const f = await api.functionalities.list();
     functionalities = f.functionalities;
+    destroyRoleFuncPickers();
     const holder = document.getElementById("create-role-funcs");
-    if (holder) holder.innerHTML = functionalityCheckboxHtml(functionalities, []);
+    if (holder) createRoleFuncPickerApi = mountFunctionalityPicker(holder, functionalities, []);
   } catch (e) {
     showToast(msg, e.message, true);
     return;
@@ -345,49 +624,76 @@ async function initRolesPage() {
     return;
   }
 
-  form?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    msg.style.display = "none";
-    const code = document.getElementById("create-role-code")?.value?.trim();
-    const name = document.getElementById("create-role-name")?.value?.trim();
-    const description = document.getElementById("create-role-desc")?.value?.trim();
-    const functionalityIds = Array.from(form.querySelectorAll('input[name="func"]:checked')).map(
-      (i) => i.value
-    );
-    try {
-      await api.roles.create({ code, name, description: description || undefined, functionalityIds });
-      form.reset();
-      const holder = document.getElementById("create-role-funcs");
-      if (holder) holder.innerHTML = functionalityCheckboxHtml(functionalities, []);
-      await renderRolesTable(tbody, functionalities);
-      showToast(msg, t("roles.msgCreated"), false);
-    } catch (ex) {
-      showToast(msg, ex.message, true);
-    }
-  });
+  showRolesListView();
 
-  document.getElementById("bo-role-edit-cancel")?.addEventListener("click", () => {
-    if (editRolePanel) editRolePanel.hidden = true;
-  });
+  const btnNew = document.getElementById("bo-roles-btn-new");
+  if (btnNew && !btnNew.dataset.boWired) {
+    btnNew.dataset.boWired = "1";
+    btnNew.addEventListener("click", () => {
+      showRolesCreateView();
+      form?.reset();
+      createRoleFuncPickerApi?.setSelectedIds([]);
+    });
+  }
 
-  document.getElementById("bo-role-edit-save")?.addEventListener("click", async () => {
-    msg.style.display = "none";
-    const id = editRolePanel?.dataset?.roleId;
-    if (!id) return;
-    const name = editRolePanel.querySelector("#edit-role-name")?.value?.trim();
-    const description = editRolePanel.querySelector("#edit-role-desc")?.value?.trim();
-    const functionalityIds = Array.from(
-      editRolePanel.querySelectorAll('input[name="func"]:checked')
-    ).map((i) => i.value);
-    try {
-      await api.roles.patch(id, { name, description: description || null, functionalityIds });
-      editRolePanel.hidden = true;
-      await renderRolesTable(tbody, functionalities);
-      showToast(msg, t("roles.msgSaved"), false);
-    } catch (ex) {
-      showToast(msg, ex.message, true);
-    }
-  });
+  const cancelCreate = document.getElementById("bo-role-create-cancel");
+  if (cancelCreate && !cancelCreate.dataset.boWired) {
+    cancelCreate.dataset.boWired = "1";
+    cancelCreate.addEventListener("click", () => {
+      showRolesListView();
+    });
+  }
+
+  if (form && !form.dataset.boSubmitWired) {
+    form.dataset.boSubmitWired = "1";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.style.display = "none";
+      const code = document.getElementById("create-role-code")?.value?.trim();
+      const name = document.getElementById("create-role-name")?.value?.trim();
+      const description = document.getElementById("create-role-desc")?.value?.trim();
+      const functionalityIds = createRoleFuncPickerApi?.getSelectedIds() ?? [];
+      try {
+        await api.roles.create({ code, name, description: description || undefined, functionalityIds });
+        form.reset();
+        createRoleFuncPickerApi?.setSelectedIds([]);
+        await renderRolesTable(tbody, functionalities);
+        showToast(msg, t("roles.msgCreated"), false);
+        showRolesListView();
+      } catch (ex) {
+        showToast(msg, ex.message, true);
+      }
+    });
+  }
+
+  const editCancel = document.getElementById("bo-role-edit-cancel");
+  if (editCancel && !editCancel.dataset.boWired) {
+    editCancel.dataset.boWired = "1";
+    editCancel.addEventListener("click", () => {
+      showRolesListView();
+    });
+  }
+
+  const editSave = document.getElementById("bo-role-edit-save");
+  if (editSave && !editSave.dataset.boWired) {
+    editSave.dataset.boWired = "1";
+    editSave.addEventListener("click", async () => {
+      msg.style.display = "none";
+      const id = editRolePanel?.dataset?.roleId;
+      if (!id) return;
+      const name = editRolePanel.querySelector("#edit-role-name")?.value?.trim();
+      const description = editRolePanel.querySelector("#edit-role-desc")?.value?.trim();
+      const functionalityIds = editRoleFuncPickerApi?.getSelectedIds() ?? [];
+      try {
+        await api.roles.patch(id, { name, description: description || null, functionalityIds });
+        await renderRolesTable(tbody, functionalities);
+        showToast(msg, t("roles.msgSaved"), false);
+        showRolesListView();
+      } catch (ex) {
+        showToast(msg, ex.message, true);
+      }
+    });
+  }
 }
 
 /* --- Functionalities --- */
@@ -423,13 +729,13 @@ function openFuncEditor(f) {
   if (!editFuncPanel) return;
   editFuncPanel.dataset.funcId = f.id;
   const fh = editFuncPanel.querySelector("#bo-func-edit-heading");
-  if (fh) fh.textContent = t("funcExtra.editHeading");
-  editFuncPanel.querySelector("#edit-func-code").textContent = f.code;
+  if (fh) fh.textContent = t("funcExtra.editTitlePrefix");
+  const codeEl = editFuncPanel.querySelector("#edit-func-code-display");
+  if (codeEl) codeEl.value = f.code || "";
   editFuncPanel.querySelector("#edit-func-name").value = f.name;
   editFuncPanel.querySelector("#edit-func-module").value = f.module || "";
   editFuncPanel.querySelector("#edit-func-desc").value = f.description || "";
-  editFuncPanel.hidden = false;
-  editFuncPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  showFuncEditView();
 }
 
 async function initFunctionalitiesPage() {
@@ -450,52 +756,83 @@ async function initFunctionalitiesPage() {
     return;
   }
 
-  form?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    msg.style.display = "none";
-    const code = document.getElementById("create-func-code")?.value?.trim();
-    const name = document.getElementById("create-func-name")?.value?.trim();
-    const module = document.getElementById("create-func-module")?.value?.trim();
-    const description = document.getElementById("create-func-desc")?.value?.trim();
-    try {
-      await api.functionalities.create({
-        code,
-        name,
-        module: module || undefined,
-        description: description || undefined,
-      });
-      form.reset();
-      await renderFuncTable(tbody);
-      showToast(msg, t("func.msgCreated"), false);
-    } catch (ex) {
-      showToast(msg, ex.message, true);
-    }
-  });
+  showFuncListView();
 
-  document.getElementById("bo-func-edit-cancel")?.addEventListener("click", () => {
-    if (editFuncPanel) editFuncPanel.hidden = true;
-  });
+  const btnNew = document.getElementById("bo-func-btn-new");
+  if (btnNew && !btnNew.dataset.boWired) {
+    btnNew.dataset.boWired = "1";
+    btnNew.addEventListener("click", () => {
+      showFuncCreateView();
+      form?.reset();
+    });
+  }
 
-  document.getElementById("bo-func-edit-save")?.addEventListener("click", async () => {
-    msg.style.display = "none";
-    const id = editFuncPanel?.dataset?.funcId;
-    if (!id) return;
-    const name = editFuncPanel.querySelector("#edit-func-name")?.value?.trim();
-    const module = editFuncPanel.querySelector("#edit-func-module")?.value?.trim();
-    const description = editFuncPanel.querySelector("#edit-func-desc")?.value?.trim();
-    try {
-      await api.functionalities.patch(id, {
-        name,
-        module: module || null,
-        description: description || null,
-      });
-      editFuncPanel.hidden = true;
-      await renderFuncTable(tbody);
-      showToast(msg, t("func.msgSaved"), false);
-    } catch (ex) {
-      showToast(msg, ex.message, true);
-    }
-  });
+  const cancelCreate = document.getElementById("bo-func-create-cancel");
+  if (cancelCreate && !cancelCreate.dataset.boWired) {
+    cancelCreate.dataset.boWired = "1";
+    cancelCreate.addEventListener("click", () => {
+      showFuncListView();
+    });
+  }
+
+  if (form && !form.dataset.boSubmitWired) {
+    form.dataset.boSubmitWired = "1";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.style.display = "none";
+      const code = document.getElementById("create-func-code")?.value?.trim();
+      const name = document.getElementById("create-func-name")?.value?.trim();
+      const module = document.getElementById("create-func-module")?.value?.trim();
+      const description = document.getElementById("create-func-desc")?.value?.trim();
+      try {
+        await api.functionalities.create({
+          code,
+          name,
+          module: module || undefined,
+          description: description || undefined,
+        });
+        form.reset();
+        await renderFuncTable(tbody);
+        showToast(msg, t("func.msgCreated"), false);
+        showFuncListView();
+      } catch (ex) {
+        showToast(msg, ex.message, true);
+      }
+    });
+  }
+
+  const editCancel = document.getElementById("bo-func-edit-cancel");
+  if (editCancel && !editCancel.dataset.boWired) {
+    editCancel.dataset.boWired = "1";
+    editCancel.addEventListener("click", () => {
+      showFuncListView();
+    });
+  }
+
+  const editSave = document.getElementById("bo-func-edit-save");
+  if (editSave && !editSave.dataset.boWired) {
+    editSave.dataset.boWired = "1";
+    editSave.addEventListener("click", async () => {
+      msg.style.display = "none";
+      const id = editFuncPanel?.dataset?.funcId;
+      if (!id) return;
+      const name = editFuncPanel.querySelector("#edit-func-name")?.value?.trim();
+      const module = editFuncPanel.querySelector("#edit-func-module")?.value?.trim();
+      const description = editFuncPanel.querySelector("#edit-func-desc")?.value?.trim();
+      try {
+        await api.functionalities.patch(id, {
+          name,
+          module: module || null,
+          description: description || null,
+        });
+        await renderFuncTable(tbody);
+        showToast(msg, t("func.msgSaved"), false);
+        showFuncListView();
+      } catch (ex) {
+        showToast(msg, ex.message, true);
+      }
+    });
+  }
 }
 
 export function initAdminPages() {

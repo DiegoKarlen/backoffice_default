@@ -24,79 +24,15 @@
       <div class="main">
         <div data-shell-topbar></div>
         <main class="content" data-bo-roles-wrap>
-        <section class="hero">
-          <div class="hero-text">
-            <span class="eyebrow" data-i18n="roles.eyebrow"></span>
-            <h1 class="hero-title" data-i18n="roles.title"></h1>
-            <p class="hero-sub" data-i18n="roles.subtitle"></p>
-          </div>
-        </section>
-
         <div id="bo-roles-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
 
-        <section class="card" style="margin-bottom: 18px;">
+        <section class="col-12 card" id="bo-roles-list-view">
           <div class="card-head">
             <div class="card-title-wrap">
-              <span class="eyebrow" data-i18n="rolesExtra.createEyebrow"></span>
-              <h2 class="card-title" data-i18n="rolesExtra.createTitle"></h2>
+              <span class="eyebrow" data-i18n="rolesExtra.breadcrumbAdminRoles"></span>
+              <h2 class="card-title" data-i18n="rolesExtra.listTitle"></h2>
             </div>
-          </div>
-          <form id="bo-role-create-form">
-            <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
-              <div class="field">
-                <label class="field-label" for="create-role-code" data-i18n="roles.labelCode"></label>
-                <input id="create-role-code" class="input" required data-i18n-placeholder="roles.placeholderCode">
-              </div>
-              <div class="field span-2">
-                <label class="field-label" for="create-role-name" data-i18n="roles.labelName"></label>
-                <input id="create-role-name" class="input" required>
-              </div>
-              <div class="field span-2">
-                <label class="field-label" for="create-role-desc" data-i18n="roles.labelDesc"></label>
-                <input id="create-role-desc" class="input" type="text">
-              </div>
-            </div>
-            <div class="field" style="margin-top:16px;">
-              <span class="field-label" data-i18n="roles.labelFuncs"></span>
-              <div id="create-role-funcs"></div>
-            </div>
-            <div style="margin-top:16px;">
-              <button type="submit" class="btn btn--primary" data-i18n="rolesExtra.createTitle"></button>
-            </div>
-          </form>
-        </section>
-
-        <section class="col-12 card" id="bo-role-edit-panel" hidden>
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="eyebrow" data-i18n="rolesExtra.editEyebrow"></span>
-              <h2 class="card-title"><span id="bo-role-edit-heading"></span> <span id="edit-role-code"></span></h2>
-            </div>
-          </div>
-          <div class="field">
-            <label class="field-label" for="edit-role-name" data-i18n="roles.labelName"></label>
-            <input id="edit-role-name" class="input" required>
-          </div>
-          <div class="field" style="margin-top:12px;">
-            <label class="field-label" for="edit-role-desc" data-i18n="roles.labelDesc"></label>
-            <input id="edit-role-desc" class="input" type="text">
-          </div>
-          <div class="field" style="margin-top:16px;">
-            <span class="field-label" data-i18n="roles.labelFuncs"></span>
-            <div id="edit-role-funcs"></div>
-          </div>
-          <div style="display:flex;gap:10px;margin-top:16px;">
-            <button type="button" class="btn btn--primary" id="bo-role-edit-save" data-i18n="roles.save"></button>
-            <button type="button" class="btn btn--ghost" id="bo-role-edit-cancel" data-i18n="roles.cancel"></button>
-          </div>
-        </section>
-
-        <section class="col-12 card">
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="eyebrow" data-i18n="rolesExtra.directoryEyebrow"></span>
-              <h2 class="card-title" data-i18n="rolesExtra.directoryTitle"></h2>
-            </div>
+            <button type="button" class="btn btn--primary" id="bo-roles-btn-new" data-i18n="roles.btnNew"></button>
           </div>
           <div style="overflow:auto;">
             <table class="table">
@@ -111,6 +47,72 @@
               </thead>
               <tbody id="bo-roles-tbody"></tbody>
             </table>
+          </div>
+        </section>
+
+        <section class="card" id="bo-role-create-panel" hidden style="margin-bottom:18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="rolesExtra.breadcrumbAdminRoles"></span>
+              <h2 class="card-title" data-i18n="rolesExtra.createTitle"></h2>
+            </div>
+          </div>
+          <form id="bo-role-create-form" class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline">
+                <label class="field-label" for="create-role-code" data-i18n="roles.labelCode"></label>
+                <input id="create-role-code" class="input input--underline" required data-i18n-placeholder="roles.placeholderCode">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-role-name" data-i18n="roles.labelName"></label>
+                <input id="create-role-name" class="input input--underline" required>
+              </div>
+              <div class="field field--underline bo-form-profile__full">
+                <label class="field-label" for="create-role-desc" data-i18n="roles.labelDesc"></label>
+                <input id="create-role-desc" class="input input--underline" type="text">
+              </div>
+            </div>
+            <div class="field bo-form-profile__full bo-form-profile__roles-block">
+              <span class="field-label" data-i18n="roles.labelFuncs"></span>
+              <div id="create-role-funcs"></div>
+            </div>
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-role-create-cancel" data-i18n="roles.cancel"></button>
+              <button type="submit" class="btn btn--primary" data-i18n="rolesExtra.saveChanges"></button>
+            </div>
+          </form>
+        </section>
+
+        <section class="col-12 card" id="bo-role-edit-panel" hidden>
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="rolesExtra.breadcrumbAdminRoles"></span>
+              <h2 class="card-title" id="bo-role-edit-heading"></h2>
+            </div>
+          </div>
+          <div class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline field--readonly bo-form-profile__full">
+                <label class="field-label" for="edit-role-code-display" data-i18n="roles.labelCode"></label>
+                <input id="edit-role-code-display" class="input input--underline" type="text" readonly aria-readonly="true" autocomplete="off">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-role-name" data-i18n="roles.labelName"></label>
+                <input id="edit-role-name" class="input input--underline" required>
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-role-desc" data-i18n="roles.labelDesc"></label>
+                <input id="edit-role-desc" class="input input--underline" type="text">
+              </div>
+            </div>
+            <div class="field bo-form-profile__full bo-form-profile__roles-block">
+              <span class="field-label" data-i18n="roles.labelFuncs"></span>
+              <div id="edit-role-funcs"></div>
+            </div>
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-role-edit-cancel" data-i18n="roles.cancel"></button>
+              <button type="button" class="btn btn--primary" id="bo-role-edit-save" data-i18n="rolesExtra.saveChanges"></button>
+            </div>
           </div>
         </section>
         </main>
