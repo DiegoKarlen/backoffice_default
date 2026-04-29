@@ -24,11 +24,15 @@
 
 /* Buttons */
 .btn {
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 9px 14px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.25;
   transition: all 180ms ease;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -57,7 +61,14 @@
   border-bottom: 1px solid var(--border-soft);
   gap: 16px;
 }
-.card-head > :last-child { flex-shrink: 0; padding-bottom: 2px; }
+/* Ajuste fino para enlaces/textos alineados al título — no aplicar a .btn o rompe el padding simétrico */
+.card-head > :last-child:not(.btn) {
+  flex-shrink: 0;
+  padding-bottom: 2px;
+}
+.card-head > .btn:last-child {
+  flex-shrink: 0;
+}
 .card-title-wrap { min-width: 0; }
 .card-title-wrap .eyebrow { display: block; margin-bottom: 4px; }
 .card-title {
@@ -68,6 +79,7 @@
   color: var(--t-base);
   margin: 0;
 }
+
 .card-action {
   font-size: 12px;
   color: var(--primary);

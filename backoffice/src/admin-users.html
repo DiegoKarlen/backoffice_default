@@ -24,93 +24,16 @@
       <div class="main">
         <div data-shell-topbar></div>
         <main class="content" data-bo-users-wrap>
-        <section class="hero">
-          <div class="hero-text">
-            <span class="eyebrow" data-i18n="users.eyebrow"></span>
-            <h1 class="hero-title" data-i18n="users.title"></h1>
-            <p class="hero-sub" data-i18n="users.subtitle"></p>
-          </div>
-        </section>
-
         <div id="bo-users-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
 
-        <section class="card" style="margin-bottom: 18px;">
+        <!-- Vista lista (única visible al cargar) -->
+        <section class="col-12 card" id="bo-users-list-view">
           <div class="card-head">
             <div class="card-title-wrap">
-              <span class="eyebrow" data-i18n="usersExtra.createEyebrow"></span>
-              <h2 class="card-title" data-i18n="usersExtra.createTitle"></h2>
+              <span class="eyebrow" data-i18n="usersExtra.breadcrumbAdminUsers"></span>
+              <h2 class="card-title" data-i18n="usersExtra.listTitle"></h2>
             </div>
-          </div>
-          <form id="bo-user-create-form" class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;align-items:end;">
-            <div class="field span-2">
-              <label class="field-label" for="create-email" data-i18n="users.colEmail"></label>
-              <input id="create-email" class="input" type="email" required autocomplete="off" data-i18n-placeholder="users.placeholderEmail">
-            </div>
-            <div class="field">
-              <label class="field-label" for="create-password" data-i18n="usersExtra.labelPassword"></label>
-              <input id="create-password" class="input" type="password" required minlength="8" autocomplete="new-password">
-            </div>
-            <div class="field">
-              <label class="field-label" for="create-displayName" data-i18n="users.labelDisplayName"></label>
-              <input id="create-displayName" class="input" type="text">
-            </div>
-            <div class="field">
-              <label class="check">
-                <input id="create-active" type="checkbox" checked>
-                <span class="box"></span>
-                <span data-i18n="users.labelActive"></span>
-              </label>
-            </div>
-            <div class="field span-2">
-              <span class="field-label" data-i18n="users.labelRoles"></span>
-              <div id="create-roles"></div>
-            </div>
-            <div class="field">
-              <button type="submit" class="btn btn--primary" data-i18n="usersExtra.createTitle"></button>
-            </div>
-          </form>
-        </section>
-
-        <section class="col-12 card" id="bo-user-edit-panel" hidden>
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="eyebrow" data-i18n="usersExtra.editEyebrow"></span>
-              <h2 class="card-title"><span id="bo-user-edit-heading"></span> <span id="edit-email"></span></h2>
-            </div>
-          </div>
-          <div class="form-grid" style="display:grid;gap:16px;">
-            <div class="field">
-              <label class="field-label" for="edit-displayName" data-i18n="users.labelDisplayName"></label>
-              <input id="edit-displayName" class="input" type="text">
-            </div>
-            <div class="field">
-              <label class="field-label" for="edit-password" data-i18n="usersExtra.labelNewPasswordOptional"></label>
-              <input id="edit-password" class="input" type="password" minlength="8" autocomplete="new-password">
-            </div>
-            <div class="field">
-              <label class="check">
-                <input id="edit-active" type="checkbox" checked>
-                <span class="box"></span>
-                <span data-i18n="users.labelActive"></span>
-              </label>
-            </div>
-            <div class="field span-2">
-              <span class="field-label" data-i18n="users.labelRoles"></span>
-              <div id="edit-roles"></div>
-            </div>
-            <div style="display:flex;gap:10px;">
-              <button type="button" class="btn btn--primary" id="bo-user-edit-save" data-i18n="users.save"></button>
-              <button type="button" class="btn btn--ghost" id="bo-user-edit-cancel" data-i18n="users.cancel"></button>
-            </div>
-          </div>
-        </section>
-
-        <section class="col-12 card">
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="eyebrow" data-i18n="usersExtra.directoryEyebrow"></span>
-              <h2 class="card-title" data-i18n="usersExtra.directoryTitle"></h2>
-            </div>
+            <button type="button" class="btn btn--primary" id="bo-users-btn-new" data-i18n="users.btnNew"></button>
           </div>
           <div style="overflow:auto;">
             <table class="table">
@@ -125,6 +48,88 @@
               </thead>
               <tbody id="bo-users-tbody"></tbody>
             </table>
+          </div>
+        </section>
+
+        <!-- Crear usuario -->
+        <section class="card" id="bo-user-create-panel" hidden style="margin-bottom:18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="usersExtra.breadcrumbAdminUsers"></span>
+              <h2 class="card-title" data-i18n="usersExtra.createTitle"></h2>
+            </div>
+          </div>
+          <form id="bo-user-create-form" class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline">
+                <label class="field-label" for="create-email" data-i18n="users.colEmail"></label>
+                <input id="create-email" class="input input--underline" type="email" required autocomplete="off" data-i18n-placeholder="users.placeholderEmail">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-displayName" data-i18n="users.labelDisplayName"></label>
+                <input id="create-displayName" class="input input--underline" type="text">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-password" data-i18n="usersExtra.labelPassword"></label>
+                <input id="create-password" class="input input--underline" type="password" required minlength="8" autocomplete="new-password">
+              </div>
+              <div class="field field--check-cell">
+                <label class="check">
+                  <input id="create-active" type="checkbox" checked>
+                  <span class="box"></span>
+                  <span data-i18n="users.labelActive"></span>
+                </label>
+              </div>
+            </div>
+            <div class="field bo-form-profile__full bo-form-profile__roles-block">
+              <span class="field-label" data-i18n="users.selectedRolesLabel"></span>
+              <div id="create-roles"></div>
+            </div>
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-user-create-cancel" data-i18n="users.cancel"></button>
+              <button type="submit" class="btn btn--primary" data-i18n="usersExtra.saveChanges"></button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Editar usuario -->
+        <section class="col-12 card" id="bo-user-edit-panel" hidden>
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="usersExtra.breadcrumbAdminUsers"></span>
+              <h2 class="card-title" id="bo-user-edit-heading"></h2>
+            </div>
+          </div>
+          <div class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline field--readonly bo-form-profile__full">
+                <label class="field-label" for="edit-email" data-i18n="users.colEmail"></label>
+                <input id="edit-email" class="input input--underline" type="email" readonly aria-readonly="true" autocomplete="off">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-displayName" data-i18n="users.labelDisplayName"></label>
+                <input id="edit-displayName" class="input input--underline" type="text">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-password" data-i18n="usersExtra.labelNewPasswordOptional"></label>
+                <input id="edit-password" class="input input--underline" type="password" minlength="8" autocomplete="new-password">
+              </div>
+              <div class="field field--check-cell bo-form-profile__full">
+                <label class="check">
+                  <input id="edit-active" type="checkbox" checked>
+                  <span class="box"></span>
+                  <span data-i18n="users.labelActive"></span>
+                </label>
+              </div>
+            </div>
+            <div class="field bo-form-profile__full bo-form-profile__roles-block">
+              <span class="field-label" data-i18n="users.selectedRolesLabel"></span>
+              <div id="edit-roles"></div>
+            </div>
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-user-edit-cancel" data-i18n="users.cancel"></button>
+              <button type="button" class="btn btn--primary" id="bo-user-edit-save" data-i18n="usersExtra.saveChanges"></button>
+            </div>
           </div>
         </section>
         </main>
