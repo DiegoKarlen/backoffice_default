@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Backoffice · Inicio</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="home" data-bo-page="home">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content">
+          <section class="hero">
+            <div class="hero-text">
+              <span class="eyebrow" data-i18n="home.eyebrow"></span>
+              <h1 class="hero-title" data-i18n="home.title"></h1>
+              <p class="hero-sub" data-i18n="home.subtitle"></p>
+            </div>
+          </section>
+
+          <section class="grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 8px;">
+            <a href="admin-users.html" class="card" style="text-decoration: none; color: inherit; display: block; padding: 20px;">
+              <span class="eyebrow" data-i18n="home.cardEyebrow"></span>
+              <h2 style="margin: 8px 0 6px; font-size: 1.15rem;" data-i18n="home.cardUsersTitle"></h2>
+              <p class="hero-sub" style="margin: 0;" data-i18n="home.cardUsersDesc"></p>
+            </a>
+            <a href="admin-roles.html" class="card" style="text-decoration: none; color: inherit; display: block; padding: 20px;">
+              <span class="eyebrow" data-i18n="home.cardEyebrow"></span>
+              <h2 style="margin: 8px 0 6px; font-size: 1.15rem;" data-i18n="home.cardRolesTitle"></h2>
+              <p class="hero-sub" style="margin: 0;" data-i18n="home.cardRolesDesc"></p>
+            </a>
+            <a href="admin-functionalities.html" class="card" style="text-decoration: none; color: inherit; display: block; padding: 20px;">
+              <span class="eyebrow" data-i18n="home.cardEyebrow"></span>
+              <h2 style="margin: 8px 0 6px; font-size: 1.15rem;" data-i18n="home.cardFuncTitle"></h2>
+              <p class="hero-sub" style="margin: 0;" data-i18n="home.cardFuncDesc"></p>
+            </a>
+          </section>
+        </main>
+        <div data-shell-footer></div>
+      </div>
+    </div>
+  </body>
+</html>

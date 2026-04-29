@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Iniciar sesión · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-bo-page="signin">
+    <div class="auth-shell">
+      <aside class="auth-aside">
+        <div class="auth-brand">
+          <div class="logo">
+            <svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#fff" d="M14.747 9.125c.527-1.426 1.736-2.573 3.317-2.573c1.643 0 2.792 1.085 3.318 2.573l6.077 16.867c.186.496.248.931.248 1.147c0 1.209-.992 2.046-2.139 2.046c-1.303 0-1.954-.682-2.264-1.611l-.931-2.915h-8.62l-.93 2.884c-.31.961-.961 1.642-2.232 1.642c-1.24 0-2.294-.93-2.294-2.17c0-.496.155-.868.217-1.023l6.233-16.867zm.34 11.256h5.891l-2.883-8.992h-.062l-2.946 8.992z"/>
+            </svg>
+          </div>
+          <div class="name" data-i18n="brand.name"></div>
+        </div>
+        <div class="auth-aside-body">
+          <span class="auth-aside-eyebrow" data-i18n="signin.asideEyebrow"></span>
+          <h1 data-i18n="signin.asideTitle"></h1>
+          <p data-i18n="signin.asideBody"></p>
+        </div>
+        <div class="auth-aside-footer">
+          <span data-i18n="footer.line"></span>
+        </div>
+      </aside>
+      <main class="auth-main">
+        <div class="auth-lang-bar" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:12px 16px;flex-wrap:wrap;">
+          <span style="opacity:0.75;font-size:12px;margin-right:auto;" data-i18n="topbar.language"></span>
+          <button type="button" class="btn btn--ghost btn--sm" data-bo-lang="en" data-i18n="lang.en"></button>
+          <button type="button" class="btn btn--ghost btn--sm" data-bo-lang="es" data-i18n="lang.es"></button>
+        </div>
+        <div class="auth-main-top"></div>
+
+        <div class="auth-card">
+          <h2 data-i18n="signin.cardTitle"></h2>
+          <p class="sub" data-i18n="signin.cardSub"></p>
+
+          <div id="bo-signin-error" class="field-help" style="display:none;margin-bottom:12px;color:var(--danger,#c0392b);"></div>
+
+          <form class="auth-form" id="bo-signin-form">
+            <div class="field">
+              <label class="field-label" for="email" data-i18n="signin.email"></label>
+              <div class="input-icon">
+                <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>
+                <input id="email" class="input" type="email" data-i18n-placeholder="signin.placeholderEmail" autocomplete="email" required>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="field-row">
+                <label class="field-label" for="password" data-i18n="signin.password"></label>
+                <a href="#" data-i18n="signin.forgot"></a>
+              </div>
+              <div class="input-icon">
+                <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                <input id="password" class="input" type="password" placeholder="••••••••" autocomplete="current-password" required>
+              </div>
+            </div>
+
+            <label class="check">
+              <input id="remember" type="checkbox">
+              <span class="box"></span>
+              <span data-i18n="signin.remember"></span>
+            </label>
+
+            <button class="btn btn--primary auth-submit" type="submit">
+              <span data-i18n="signin.submit"></span>
+              <svg viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </button>
+          </form>
+        </div>
+
+        <div class="auth-main-bottom"></div>
+      </main>
+    </div>
+  </body>
+</html>

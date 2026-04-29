@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Functionalities · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="admin-functionalities" data-bo-page="functionalities">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content" data-bo-func-wrap>
+        <section class="hero">
+          <div class="hero-text">
+            <span class="eyebrow" data-i18n="func.eyebrow"></span>
+            <h1 class="hero-title" data-i18n="func.title"></h1>
+            <p class="hero-sub" data-i18n="func.subtitle"></p>
+          </div>
+        </section>
+
+        <div id="bo-func-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+        <section class="card" style="margin-bottom: 18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="funcExtra.formEyebrow"></span>
+              <h2 class="card-title" data-i18n="funcExtra.createTitle"></h2>
+            </div>
+          </div>
+          <form id="bo-func-create-form" class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;align-items:end;">
+            <div class="field">
+              <label class="field-label" for="create-func-code" data-i18n="func.labelCode"></label>
+              <input id="create-func-code" class="input" required data-i18n-placeholder="func.placeholderCode">
+            </div>
+            <div class="field span-2">
+              <label class="field-label" for="create-func-name" data-i18n="func.labelName"></label>
+              <input id="create-func-name" class="input" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="create-func-module" data-i18n="func.labelModule"></label>
+              <input id="create-func-module" class="input" data-i18n-placeholder="func.placeholderModule">
+            </div>
+            <div class="field span-2">
+              <label class="field-label" for="create-func-desc" data-i18n="func.labelDesc"></label>
+              <input id="create-func-desc" class="input" type="text">
+            </div>
+            <div class="field">
+              <button type="submit" class="btn btn--primary" data-i18n="func.btnSubmit"></button>
+            </div>
+          </form>
+        </section>
+
+        <section class="col-12 card" id="bo-func-edit-panel" hidden>
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="funcExtra.editEyebrow"></span>
+              <h2 class="card-title"><span id="bo-func-edit-heading"></span> <span id="edit-func-code"></span></h2>
+            </div>
+          </div>
+          <div class="form-grid" style="display:grid;gap:16px;">
+            <div class="field">
+              <label class="field-label" for="edit-func-name" data-i18n="func.labelName"></label>
+              <input id="edit-func-name" class="input" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="edit-func-module" data-i18n="func.labelModule"></label>
+              <input id="edit-func-module" class="input">
+            </div>
+            <div class="field span-2">
+              <label class="field-label" for="edit-func-desc" data-i18n="func.labelDesc"></label>
+              <input id="edit-func-desc" class="input" type="text">
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button type="button" class="btn btn--primary" id="bo-func-edit-save" data-i18n="func.save"></button>
+              <button type="button" class="btn btn--ghost" id="bo-func-edit-cancel" data-i18n="func.cancel"></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="col-12 card">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="funcExtra.catalogEyebrow"></span>
+              <h2 class="card-title" data-i18n="funcExtra.directoryTitle"></h2>
+            </div>
+          </div>
+          <div style="overflow:auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="func.colCode"></th>
+                  <th data-i18n="func.colName"></th>
+                  <th data-i18n="func.colModule"></th>
+                  <th data-i18n="funcExtra.colDesc"></th>
+                  <th style="text-align:right;" data-i18n="func.colActions"></th>
+                </tr>
+              </thead>
+              <tbody id="bo-func-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+        </main>
+        <div data-shell-footer></div>
+      </div>
+    </div>
+  </body>
+</html>

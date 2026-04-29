@@ -1,0 +1,19 @@
+Backoffice app (folder: backoffice/) — signin.html: replace the form onsubmit stub with a fetch to the API, then redirect.
+
+  const API = 'http://localhost:4001';
+  const projectCode = 'default';
+
+  async function login(email, password) {
+    const r = await fetch(API + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, projectCode }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || 'Login failed');
+    const data = await r.json();
+    sessionStorage.setItem('bo_token', data.accessToken);
+    sessionStorage.setItem('bo_user', JSON.stringify(data.user));
+    window.location.href = 'index.html';
+  }
+
+Use data.user.functionalities (array of { code, name, module }) to show/hide menu entries per screen.

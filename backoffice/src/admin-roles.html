@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Roles · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="admin-roles" data-bo-page="roles">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content" data-bo-roles-wrap>
+        <section class="hero">
+          <div class="hero-text">
+            <span class="eyebrow" data-i18n="roles.eyebrow"></span>
+            <h1 class="hero-title" data-i18n="roles.title"></h1>
+            <p class="hero-sub" data-i18n="roles.subtitle"></p>
+          </div>
+        </section>
+
+        <div id="bo-roles-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+        <section class="card" style="margin-bottom: 18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="rolesExtra.createEyebrow"></span>
+              <h2 class="card-title" data-i18n="rolesExtra.createTitle"></h2>
+            </div>
+          </div>
+          <form id="bo-role-create-form">
+            <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+              <div class="field">
+                <label class="field-label" for="create-role-code" data-i18n="roles.labelCode"></label>
+                <input id="create-role-code" class="input" required data-i18n-placeholder="roles.placeholderCode">
+              </div>
+              <div class="field span-2">
+                <label class="field-label" for="create-role-name" data-i18n="roles.labelName"></label>
+                <input id="create-role-name" class="input" required>
+              </div>
+              <div class="field span-2">
+                <label class="field-label" for="create-role-desc" data-i18n="roles.labelDesc"></label>
+                <input id="create-role-desc" class="input" type="text">
+              </div>
+            </div>
+            <div class="field" style="margin-top:16px;">
+              <span class="field-label" data-i18n="roles.labelFuncs"></span>
+              <div id="create-role-funcs"></div>
+            </div>
+            <div style="margin-top:16px;">
+              <button type="submit" class="btn btn--primary" data-i18n="rolesExtra.createTitle"></button>
+            </div>
+          </form>
+        </section>
+
+        <section class="col-12 card" id="bo-role-edit-panel" hidden>
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="rolesExtra.editEyebrow"></span>
+              <h2 class="card-title"><span id="bo-role-edit-heading"></span> <span id="edit-role-code"></span></h2>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="edit-role-name" data-i18n="roles.labelName"></label>
+            <input id="edit-role-name" class="input" required>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label class="field-label" for="edit-role-desc" data-i18n="roles.labelDesc"></label>
+            <input id="edit-role-desc" class="input" type="text">
+          </div>
+          <div class="field" style="margin-top:16px;">
+            <span class="field-label" data-i18n="roles.labelFuncs"></span>
+            <div id="edit-role-funcs"></div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;">
+            <button type="button" class="btn btn--primary" id="bo-role-edit-save" data-i18n="roles.save"></button>
+            <button type="button" class="btn btn--ghost" id="bo-role-edit-cancel" data-i18n="roles.cancel"></button>
+          </div>
+        </section>
+
+        <section class="col-12 card">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="rolesExtra.directoryEyebrow"></span>
+              <h2 class="card-title" data-i18n="rolesExtra.directoryTitle"></h2>
+            </div>
+          </div>
+          <div style="overflow:auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="roles.colCode"></th>
+                  <th data-i18n="roles.colName"></th>
+                  <th data-i18n="rolesExtra.colDesc"></th>
+                  <th data-i18n="rolesExtra.colCount"></th>
+                  <th style="text-align:right;" data-i18n="roles.colActions"></th>
+                </tr>
+              </thead>
+              <tbody id="bo-roles-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+        </main>
+        <div data-shell-footer></div>
+      </div>
+    </div>
+  </body>
+</html>

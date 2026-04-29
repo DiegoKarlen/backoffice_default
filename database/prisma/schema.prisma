@@ -1,0 +1,62 @@
+// Single-tenant backoffice: users, roles, functionalities (RBAC).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  displayName  String?
+  active       Boolean    @default(true)
+  roles        UserRole[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Role {
+  id              String                @id @default(uuid())
+  code            String                @unique
+  name            String
+  description     String?
+  users           UserRole[]
+  functionalities RoleFunctionality[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+}
+
+model Functionality {
+  id          String                @id @default(uuid())
+  code        String                @unique
+  name        String
+  description String?
+  /// Grouping for menus or feature flags per product area.
+  module      String?
+  roles       RoleFunctionality[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RoleFunctionality {
+  roleId          String
+  functionalityId String
+  role            Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  functionality   Functionality   @relation(fields: [functionalityId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, functionalityId])
+}

@@ -1,0 +1,21 @@
+# PostgreSQL local — debe coincidir con api/.env → DATABASE_URL
+# Levantar:  docker compose up -d
+# Parar:      docker compose down
+# Datos:      volumen named postgres_data
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: backoffice_generic_admin
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: generic_admin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
