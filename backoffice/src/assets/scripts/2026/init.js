@@ -155,7 +155,7 @@ function initSidebarPrefetch() {
 }
 
 function initMobileDrawer() {
-  // Mobile: hamburger button (rendered in topbar at ≤720px) opens an off-canvas
+  // Narrow viewport: hamburger (visible at ≤1100px via CSS) opens off-canvas
   // sidebar drawer. Closes on backdrop click, Esc, or selecting a nav link.
   const body = document.body;
   if (!body) return;

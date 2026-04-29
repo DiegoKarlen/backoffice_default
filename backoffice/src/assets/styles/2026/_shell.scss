@@ -1,5 +1,5 @@
 /* ============ SHELL ============ */
-.shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+.shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
 
 /* ============ SIDEBAR ============ */
 .d-sidebar {
@@ -10,6 +10,8 @@
   height: 100vh;
   display: flex; flex-direction: column; gap: 22px;
   overflow-y: auto;
+  /* Grid: sin esto, min-width:auto usa min-content (~280px) e hincha la columna “0” en móvil */
+  min-width: 0;
 }
 .d-sidebar::-webkit-scrollbar { width: 4px; }
 .d-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -233,11 +235,24 @@ html.bo-use-page-enter.bo-shell-ready .shell {
 .workspace-chev { margin-left: auto; color: var(--t-light); }
 
 /* ============ MAIN ============ */
-.main { display: flex; flex-direction: column; min-width: 0; }
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
 
-/* ============ HAMBURGER (mobile only — see _responsive.scss) ============ */
+/* Área scrollable bajo el topbar */
+.main > main.content {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ============ HAMBURGER (mobile / tablet — see _responsive.scss) ============ */
 .hamburger {
-  display: none; /* Shown via media query under 720px */
+  display: none; /* Shown via media query ≤1100px */
   width: 36px; height: 36px;
   align-items: center; justify-content: center;
   border-radius: 8px;
