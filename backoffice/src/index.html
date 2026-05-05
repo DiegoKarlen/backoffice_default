@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Backoffice · Inicio</title>
+    <title>Backoffice · Próximos bingos</title>
     <script>
       (function () {
         try {
@@ -23,31 +23,48 @@
       <div data-shell-sidebar></div>
       <div class="main">
         <div data-shell-topbar></div>
-        <main class="content">
-          <section class="hero">
-            <div class="hero-text">
-              <span class="eyebrow" data-i18n="home.eyebrow"></span>
-              <h1 class="hero-title" data-i18n="home.title"></h1>
-              <p class="hero-sub" data-i18n="home.subtitle"></p>
-            </div>
+        <main class="content" data-bo-home-wrap>
+          <div id="bo-home-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+          <section class="hero hero--compact">
+            <h1 class="hero-title" data-i18n="home.pageHeading"></h1>
           </section>
 
-          <section class="grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 8px;">
-            <a href="admin-users.html" class="card" style="text-decoration: none; color: inherit; display: block; padding: 20px;">
-              <span class="eyebrow" data-i18n="home.cardEyebrow"></span>
-              <h2 style="margin: 8px 0 6px; font-size: 1.15rem;" data-i18n="home.cardUsersTitle"></h2>
-              <p class="hero-sub" style="margin: 0;" data-i18n="home.cardUsersDesc"></p>
-            </a>
-            <a href="admin-roles.html" class="card" style="text-decoration: none; color: inherit; display: block; padding: 20px;">
-              <span class="eyebrow" data-i18n="home.cardEyebrow"></span>
-              <h2 style="margin: 8px 0 6px; font-size: 1.15rem;" data-i18n="home.cardRolesTitle"></h2>
-              <p class="hero-sub" style="margin: 0;" data-i18n="home.cardRolesDesc"></p>
-            </a>
-            <a href="admin-functionalities.html" class="card" style="text-decoration: none; color: inherit; display: block; padding: 20px;">
-              <span class="eyebrow" data-i18n="home.cardEyebrow"></span>
-              <h2 style="margin: 8px 0 6px; font-size: 1.15rem;" data-i18n="home.cardFuncTitle"></h2>
-              <p class="hero-sub" style="margin: 0;" data-i18n="home.cardFuncDesc"></p>
-            </a>
+          <section class="bo-home-bingo" id="bo-home-bingo" aria-label="Bingos">
+            <div class="bo-home-bingo__grid">
+              <div class="bo-home-next" id="bo-home-next" hidden>
+                <div class="bo-home-next__glow" aria-hidden="true"></div>
+                <div class="bo-home-next__inner">
+                  <div class="bo-home-next__head">
+                    <div>
+                      <div class="eyebrow" data-i18n="home.bingoNextEyebrow"></div>
+                      <div class="bo-home-next__title" id="bo-home-next-title">—</div>
+                      <div class="bo-home-next__meta" id="bo-home-next-meta">—</div>
+                    </div>
+                    <div class="bo-home-badge" id="bo-home-next-badge">75</div>
+                  </div>
+
+                  <div class="bo-home-countdown" aria-live="polite">
+                    <div class="bo-home-countdown__label" data-i18n="home.bingoCountdownLabel"></div>
+                    <div class="bo-home-countdown__digits mono" id="bo-home-countdown">00:00:00</div>
+                    <div class="bo-home-countdown__sub" id="bo-home-countdown-sub">—</div>
+                  </div>
+
+                  <div class="bo-home-next__hint mono" id="bo-home-next-starts">—</div>
+                </div>
+              </div>
+
+              <aside class="bo-home-upcoming card" id="bo-home-upcoming" hidden>
+                <div class="card-head" style="margin-bottom: 12px; padding-bottom: 12px;">
+                  <div class="card-title-wrap">
+                    <span class="eyebrow" data-i18n="home.bingoUpcomingEyebrow"></span>
+                    <h2 class="card-title" data-i18n="home.bingoUpcomingTitle"></h2>
+                  </div>
+                </div>
+                <ol class="bo-home-upcoming__list" id="bo-home-upcoming-list"></ol>
+                <p class="field-help" id="bo-home-upcoming-empty" data-i18n="home.bingoUpcomingEmpty" style="display:none;margin:0;"></p>
+              </aside>
+            </div>
           </section>
         </main>
         <div data-shell-footer></div>

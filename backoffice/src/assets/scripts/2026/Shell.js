@@ -50,6 +50,19 @@ export const NAV = [
       },
     ],
   },
+  {
+    labelKey: "nav.areas.game",
+    items: [
+      {
+        key: "admin-bingos",
+        textKey: "nav.items.bingos",
+        href: "admin-bingos.html",
+        func: "bo.bingo.manage",
+        icon:
+          '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/>',
+      },
+    ],
+  },
 ];
 
 const BRAND_LOGO = `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">

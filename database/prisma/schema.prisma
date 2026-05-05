@@ -18,6 +18,9 @@ model User {
   roles        UserRole[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+
+  bingosCreated Bingo[] @relation("BingoCreatedBy")
+  bingosUpdated Bingo[] @relation("BingoUpdatedBy")
 }
 
 model Role {
@@ -59,4 +62,57 @@ model RoleFunctionality {
   functionality   Functionality   @relation(fields: [functionalityId], references: [id], onDelete: Cascade)
 
   @@id([roleId, functionalityId])
+}
+
+enum BingoType {
+  BINGO_75
+  BINGO_90
+}
+
+enum BingoStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// --- Bingo (simplified) ---
+
+enum BingoFigure {
+  LINE
+  PERIMETER
+  FULL_HOUSE
+}
+
+model Bingo {
+  id                 String      @id @default(uuid())
+  roomName           String
+  status             BingoStatus @default(INACTIVE)
+  bingoType          BingoType
+  startDateTime      DateTime
+  repeatEveryMinutes Int?
+  cardPrice          Decimal     @db.Decimal(14, 4)
+  minPlayersToStart  Int         @default(2)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  createdByUserId    String?
+  updatedByUserId    String?
+  createdBy          User?       @relation("BingoCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy          User?       @relation("BingoUpdatedBy", fields: [updatedByUserId], references: [id])
+  prizes             BingoPrize[]
+
+  @@index([status])
+  @@index([startDateTime])
+  @@index([bingoType])
+}
+
+model BingoPrize {
+  id        String     @id @default(uuid())
+  bingoId   String
+  bingo     Bingo      @relation(fields: [bingoId], references: [id], onDelete: Cascade)
+  figure    BingoFigure
+  amount    Decimal    @db.Decimal(14, 4)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([bingoId, figure])
+  @@index([bingoId])
 }

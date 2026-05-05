@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bingos · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="admin-bingos" data-bo-page="bingos">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content" data-bo-bingos-wrap>
+        <div id="bo-bingos-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+        <!-- Vista lista (única visible al cargar) -->
+        <section class="col-12 card" id="bo-bingos-list-view">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="bingoExtra.breadcrumbAdminBingos"></span>
+              <h2 class="card-title" data-i18n="bingoExtra.listTitle"></h2>
+            </div>
+            <button type="button" class="btn btn--primary" id="bo-bingos-btn-new" data-i18n="bingo.btnNew"></button>
+          </div>
+
+          <div class="bo-bingo-filters">
+            <div class="field field--underline field--grow">
+              <label class="field-label" for="bingo-filter-name" data-i18n="bingo.filterRoomName"></label>
+              <input id="bingo-filter-name" class="input input--underline" type="search" autocomplete="off">
+            </div>
+            <div class="field field--underline">
+              <label class="field-label" for="bingo-filter-status" data-i18n="bingo.filterStatus"></label>
+              <select id="bingo-filter-status" class="input input--underline">
+                <option value="">—</option>
+                <option value="ACTIVE" data-i18n="bingo.statusActive"></option>
+                <option value="INACTIVE" data-i18n="bingo.statusInactive"></option>
+              </select>
+            </div>
+            <div class="field field--underline">
+              <label class="field-label" for="bingo-filter-type" data-i18n="bingo.filterType"></label>
+              <select id="bingo-filter-type" class="input input--underline">
+                <option value="">—</option>
+                <option value="BINGO_75">75</option>
+                <option value="BINGO_90">90</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn--ghost" id="bo-bingo-filter-apply" data-i18n="bingo.applyFilters"></button>
+          </div>
+
+          <div style="overflow:auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="bingo.colRoomName"></th>
+                  <th data-i18n="bingo.colType"></th>
+                  <th data-i18n="bingo.colStatus"></th>
+                  <th data-i18n="bingo.colStart"></th>
+                  <th data-i18n="bingo.colRepeat"></th>
+                  <th data-i18n="bingo.colCardPrice"></th>
+                  <th data-i18n="bingo.colMinPlayers"></th>
+                  <th style="text-align:right;" data-i18n="bingo.colActions"></th>
+                </tr>
+              </thead>
+              <tbody id="bo-bingo-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Crear bingo -->
+        <section class="card" id="bo-bingo-create-panel" hidden style="margin-bottom:18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="bingoExtra.breadcrumbAdminBingos"></span>
+              <h2 class="card-title" data-i18n="bingoExtra.createTitle"></h2>
+            </div>
+          </div>
+
+          <form id="bo-bingo-create-form" class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline">
+                <label class="field-label" for="create-roomName" data-i18n="bingo.labelRoomName"></label>
+                <input id="create-roomName" class="input input--underline" type="text" required autocomplete="off">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-bingoType" data-i18n="bingo.labelBingoType"></label>
+                <select id="create-bingoType" class="input input--underline">
+                  <option value="BINGO_75" data-i18n="bingo.type75"></option>
+                  <option value="BINGO_90" data-i18n="bingo.type90"></option>
+                </select>
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-start" data-i18n="bingo.labelStart"></label>
+                <input id="create-start" class="input input--underline" type="datetime-local" required>
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-repeatEveryMinutes" data-i18n="bingo.labelRepeatEvery"></label>
+                <input id="create-repeatEveryMinutes" class="input input--underline" type="number" min="1" placeholder="30">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-cardPrice" data-i18n="bingo.labelCardPrice"></label>
+                <input id="create-cardPrice" class="input input--underline" type="text" inputmode="decimal" required value="1">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
+                <input id="create-minPlayersToStart" class="input input--underline" type="number" min="1" value="2">
+              </div>
+              <div class="field field--check-cell">
+                <label class="check">
+                  <input id="create-active" type="checkbox">
+                  <span class="box"></span>
+                  <span data-i18n="bingo.labelActive"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field bo-form-profile__full bo-form-profile__roles-block">
+              <span class="field-label" data-i18n="bingo.prizesTitle"></span>
+              <div id="create-prizes"></div>
+            </div>
+
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-bingo-create-cancel" data-i18n="bingo.cancel"></button>
+              <button type="submit" class="btn btn--primary" data-i18n="bingoExtra.saveChanges"></button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Editar bingo -->
+        <section class="col-12 card" id="bo-bingo-edit-panel" hidden>
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="bingoExtra.breadcrumbAdminBingos"></span>
+              <h2 class="card-title" id="bo-bingo-edit-heading"></h2>
+            </div>
+          </div>
+          <div class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline">
+                <label class="field-label" for="edit-roomName" data-i18n="bingo.labelRoomName"></label>
+                <input id="edit-roomName" class="input input--underline" type="text" required autocomplete="off">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-bingoType" data-i18n="bingo.labelBingoType"></label>
+                <select id="edit-bingoType" class="input input--underline">
+                  <option value="BINGO_75" data-i18n="bingo.type75"></option>
+                  <option value="BINGO_90" data-i18n="bingo.type90"></option>
+                </select>
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-start" data-i18n="bingo.labelStart"></label>
+                <input id="edit-start" class="input input--underline" type="datetime-local" required>
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-repeatEveryMinutes" data-i18n="bingo.labelRepeatEvery"></label>
+                <input id="edit-repeatEveryMinutes" class="input input--underline" type="number" min="1" placeholder="30">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-cardPrice" data-i18n="bingo.labelCardPrice"></label>
+                <input id="edit-cardPrice" class="input input--underline" type="text" inputmode="decimal" required>
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
+                <input id="edit-minPlayersToStart" class="input input--underline" type="number" min="1" required>
+              </div>
+              <div class="field field--check-cell">
+                <label class="check">
+                  <input id="edit-active" type="checkbox">
+                  <span class="box"></span>
+                  <span data-i18n="bingo.labelActive"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field bo-form-profile__full bo-form-profile__roles-block">
+              <span class="field-label" data-i18n="bingo.prizesTitle"></span>
+              <div id="edit-prizes"></div>
+            </div>
+
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-bingo-edit-cancel" data-i18n="bingo.cancel"></button>
+              <button type="button" class="btn btn--primary" id="bo-bingo-edit-save" data-i18n="bingoExtra.saveChanges"></button>
+            </div>
+          </div>
+        </section>
+
+        <div data-shell-footer></div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
+
