@@ -53,6 +53,15 @@ async function main() {
     },
     update: {},
   });
+  const fRoom = await prisma.functionality.upsert({
+    where: { code: "bo.room.manage" },
+    create: {
+      code: "bo.room.manage",
+      name: "Manage rooms",
+      module: "game",
+    },
+    update: { name: "Manage rooms" },
+  });
 
   let adminRole = await prisma.role.findUnique({
     where: { code: "admin" },
@@ -71,6 +80,7 @@ async function main() {
             { functionality: { connect: { id: fRoles.id } } },
             { functionality: { connect: { id: fFunc.id } } },
             { functionality: { connect: { id: fBingo.id } } },
+            { functionality: { connect: { id: fRoom.id } } },
           ],
         },
       },
@@ -86,6 +96,7 @@ async function main() {
       { roleId: adminRole.id, functionalityId: fRoles.id },
       { roleId: adminRole.id, functionalityId: fFunc.id },
       { roleId: adminRole.id, functionalityId: fBingo.id },
+      { roleId: adminRole.id, functionalityId: fRoom.id },
     ],
     skipDuplicates: true,
   });

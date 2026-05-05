@@ -54,6 +54,14 @@ export const NAV = [
     labelKey: "nav.areas.game",
     items: [
       {
+        key: "admin-rooms",
+        textKey: "nav.items.rooms",
+        href: "admin-rooms.html",
+        func: "bo.room.manage",
+        icon:
+          '<path d="M4 10h16"/><path d="M6 6h12v14H6z"/><path d="M9 14h6"/>',
+      },
+      {
         key: "admin-bingos",
         textKey: "nav.items.bingos",
         href: "admin-bingos.html",

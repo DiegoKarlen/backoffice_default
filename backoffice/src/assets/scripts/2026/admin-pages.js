@@ -12,6 +12,7 @@ import {
 import { api, loginRequest } from "./bo-api.js";
 import { getLocale, t } from "./bo-i18n.js";
 import { initBingosPage } from "./bingo-admin.js";
+import { initRoomsPage } from "./room-admin.js";
 
 function showToast(el, msg, isError) {
   if (!el) return;
@@ -178,7 +179,7 @@ async function initHomePage() {
     upcomingEl.hidden = false;
     if (emptyEl) emptyEl.style.display = upcoming.length ? "none" : "block";
 
-    if (titleEl) titleEl.textContent = next.roomName || "—";
+    if (titleEl) titleEl.textContent = next.name || "—";
     if (metaEl) metaEl.textContent = metaLine(next.bingoType, next.cardPrice);
     if (badgeEl) badgeEl.textContent = String(next.bingoType || "").replace(/\D/g, "") || "?";
 
@@ -219,7 +220,7 @@ async function initHomePage() {
 
         const line1 = document.createElement("div");
         line1.className = "bo-home-upcoming__name";
-        line1.textContent = row.roomName || "—";
+        line1.textContent = row.name || "—";
 
         const line2 = document.createElement("div");
         line2.className = "bo-home-upcoming__when mono";
@@ -1022,10 +1023,17 @@ export function initAdminPages() {
   else if (page === "users") initUsersPage();
   else if (page === "roles") initRolesPage();
   else if (page === "functionalities") initFunctionalitiesPage();
-  else if (page === "bingos") {
+  else if (page === "rooms") {
+    if (!hasFunctionality("bo.room.manage")) {
+      document.querySelector("[data-bo-rooms-wrap]")?.remove();
+      showToast(document.getElementById("bo-rooms-msg"), t("errors.noPermissionRoom"), true);
+      return;
+    }
+    void initRoomsPage();
+  } else if (page === "bingos") {
     if (!hasFunctionality("bo.bingo.manage")) {
-      document.querySelector("[data-bo-bingo-wrap]")?.remove();
-      showToast(document.getElementById("bo-bingo-msg"), t("errors.noPermissionBingo"), true);
+      document.querySelector("[data-bo-bingos-wrap]")?.remove();
+      showToast(document.getElementById("bo-bingos-msg"), t("errors.noPermissionBingo"), true);
       return;
     }
     void initBingosPage();

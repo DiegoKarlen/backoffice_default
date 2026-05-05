@@ -1,5 +1,13 @@
 import "./style.css";
-import { fetchLiveSnapshot, fetchUpcoming, liveEventsUrl, type LiveSnapshot, type OccurrencePrize } from "./api.js";
+import {
+  fetchLiveSnapshot,
+  fetchPublicRooms,
+  fetchUpcoming,
+  liveEventsUrl,
+  type LiveSnapshot,
+  type OccurrencePrize,
+} from "./api.js";
+import { setRoomSlug } from "./config.js";
 
 function esc(s: string): string {
   const d = document.createElement("div");
@@ -61,17 +69,6 @@ function renderPrizesHtml(prizes: OccurrencePrize[]): string {
     .join("");
 }
 
-/** Id estable por partida (solo visual). */
-function matchDisplayId(cur: NonNullable<LiveSnapshot["current"]>): string {
-  const raw = `${cur.bingoId}|${cur.scheduledStartsAt}`;
-  let h = 2166136261;
-  for (let i = 0; i < raw.length; i++) {
-    h ^= raw.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return String((h >>> 0) % 900000 + 100000);
-}
-
 let prevLastBall: number | null = null;
 
 function applySnapshot(s: LiveSnapshot): void {
@@ -84,6 +81,12 @@ function applySnapshot(s: LiveSnapshot): void {
     root.classList.toggle("sd--live", live);
   }
 
+  const brandBan = document.querySelector<HTMLParagraphElement>("#bd-room-banner");
+  if (brandBan) {
+    brandBan.textContent =
+      s.roomTitle && s.roomSlug ? `${s.roomTitle} · /r/${s.roomSlug}` : "";
+  }
+
   const liveDot = document.querySelector<HTMLSpanElement>("#bd-live-dot");
   const phaseLive = document.querySelector<HTMLDivElement>("#bd-phase-live");
   if (liveDot && phaseLive) {
@@ -94,13 +97,16 @@ function applySnapshot(s: LiveSnapshot): void {
   const footTime = document.querySelector<HTMLSpanElement>("#bd-server-time");
   if (footTime) footTime.textContent = formatWhen(s.serverTime);
 
-  const salaLine = document.querySelector<HTMLParagraphElement>("#bd-sala-line");
-  if (salaLine) {
-    salaLine.textContent = cur ? `SALA: ${cur.roomName}` : "SALA: —";
+  const roomLine = document.querySelector<HTMLParagraphElement>("#bd-room-line");
+  if (roomLine) {
+    roomLine.textContent = cur ? `ROOM: ${cur.name}` : "ROOM: —";
   }
 
   const matchId = document.querySelector<HTMLSpanElement>("#bd-match-id");
-  if (matchId) matchId.textContent = cur ? `#${matchDisplayId(cur)}` : "#—";
+  if (matchId) {
+    matchId.textContent =
+      cur && typeof cur.roundSequence === "number" ? `#${cur.roundSequence}` : "#—";
+  }
 
   const footerType = document.querySelector<HTMLSpanElement>("#bd-footer-type");
   if (footerType) footerType.textContent = cur ? `${ballLabel(cur.bingoType)} bolas` : "—";
@@ -112,8 +118,8 @@ function applySnapshot(s: LiveSnapshot): void {
 
   const nextBanner = document.querySelector<HTMLParagraphElement>("#bd-next-banner");
   if (nextBanner) {
-    if (!live && s.nextScheduledAt && s.nextRoomName) {
-      nextBanner.innerHTML = `PRÓXIMO SORTEO · <span class="mono">${esc(s.nextRoomName)}</span> · ${esc(formatWhen(s.nextScheduledAt))}`;
+    if (!live && s.nextScheduledAt && s.nextName) {
+      nextBanner.innerHTML = `PRÓXIMO SORTEO · <span class="mono">${esc(s.nextName)}</span> · ${esc(formatWhen(s.nextScheduledAt))}`;
       nextBanner.hidden = false;
     } else if (!live) {
       nextBanner.textContent = "Sin partidas programadas en el horizonte.";
@@ -126,8 +132,8 @@ function applySnapshot(s: LiveSnapshot): void {
   const idleRoom = document.querySelector<HTMLParagraphElement>("#bd-idle-room");
   const idleWhen = document.querySelector<HTMLParagraphElement>("#bd-idle-when");
   if (idleRoom && idleWhen) {
-    if (!live && s.nextScheduledAt && s.nextRoomName) {
-      idleRoom.textContent = s.nextRoomName;
+    if (!live && s.nextScheduledAt && s.nextName) {
+      idleRoom.textContent = s.nextName;
       idleWhen.textContent = formatWhen(s.nextScheduledAt);
     } else if (!live) {
       idleRoom.textContent = "Sin agenda próxima";
@@ -234,16 +240,14 @@ function tickClocks(s: LiveSnapshot | null): void {
 
 let lastSnap: LiveSnapshot | null = null;
 
-const app = document.querySelector<HTMLDivElement>("#app");
-if (!app) throw new Error("#app missing");
-
-app.innerHTML = `
+const DISPLAY_MARKUP = `
   <div class="sd sd--idle" id="bd-root">
     <header class="sd-top glass">
       <div class="sd-top__brand">
         <div class="sd-brand">
           <span class="sd-brand__crown" aria-hidden="true">♛</span>
           <span class="sd-brand__text">BINGO</span>
+          <p class="sd-brand__banner mono" id="bd-room-banner"></p>
         </div>
       </div>
       <div class="sd-top__rail">
@@ -252,7 +256,7 @@ app.innerHTML = `
           <span class="sd-live__txt">EN VIVO</span>
         </div>
         <div class="sd-pill sd-clock mono" id="bd-clock">00:00:00</div>
-        <p class="sd-pill sd-sala mono sd-show-live" id="bd-sala-line">SALA: —</p>
+        <p class="sd-pill sd-room mono sd-show-live" id="bd-room-line">ROOM: —</p>
         <p class="sd-pill sd-match mono sd-show-live">PARTIDA <span id="bd-match-id">#—</span></p>
         <div class="sd-countdown sd-show-live">
           <span class="sd-countdown__lbl">PRÓXIMO SORTEO EN</span>
@@ -348,8 +352,6 @@ app.innerHTML = `
   </div>
 `;
 
-const upcomingBody = document.querySelector("#bd-upcoming-body")!;
-
 function connectEventSource(): void {
   const url = liveEventsUrl();
   const es = new EventSource(url);
@@ -412,16 +414,22 @@ function connectEventSource(): void {
   };
 }
 
-async function renderUpcoming() {
-  try {
-    const data = await fetchUpcoming({ limit: 12, horizonDays: 14 });
-    const rows = data.upcoming;
-    if (!rows.length) {
-      upcomingBody.innerHTML = `<p class="sd-muted">Sin fechas en el horizonte.</p>`;
-      return;
-    }
+function mountDisplay(host: HTMLElement): void {
+  host.innerHTML = DISPLAY_MARKUP;
 
-    upcomingBody.innerHTML = `
+  const upcomingBody = host.querySelector<HTMLElement>("#bd-upcoming-body")!;
+  if (!upcomingBody) throw new Error("#bd-upcoming-body missing");
+
+  async function renderUpcoming() {
+    try {
+      const data = await fetchUpcoming({ limit: 12, horizonDays: 14 });
+      const rows = data.upcoming;
+      if (!rows.length) {
+        upcomingBody.innerHTML = `<p class="sd-muted">Sin fechas en el horizonte.</p>`;
+        return;
+      }
+
+      upcomingBody.innerHTML = `
       <ul class="sd-up-list">
         ${rows
           .map(
@@ -429,7 +437,7 @@ async function renderUpcoming() {
           <li class="sd-up-item">
             <span class="sd-up-item__n mono">${i + 1}</span>
             <div class="sd-up-item__body">
-              <span class="sd-up-item__room">${esc(r.roomName)}</span>
+              <span class="sd-up-item__room">${esc(r.name)}</span>
               <span class="sd-up-item__time mono">${esc(formatWhen(r.startsAt))}</span>
             </div>
             <span class="sd-up-item__chip mono">${esc(ballLabel(r.bingoType))}</span>
@@ -439,22 +447,71 @@ async function renderUpcoming() {
           .join("")}
       </ul>
     `;
+    } catch (e) {
+      upcomingBody.innerHTML = `<p class="sd-err">${esc(e instanceof Error ? e.message : "Error")}</p>`;
+    }
+  }
+
+  void fetchLiveSnapshot()
+    .then((s) => {
+      lastSnap = s;
+      applySnapshot(s);
+      tickClocks(s);
+    })
+    .catch(() => {
+      tickClocks(null);
+    });
+
+  setInterval(() => tickClocks(lastSnap), 1000);
+
+  void renderUpcoming();
+  connectEventSource();
+}
+
+async function renderRoomPicker(host: HTMLElement): Promise<void> {
+  host.innerHTML = `
+    <div class="sd-picker glass" style="max-width:560px;margin:48px auto;padding:32px;border-radius:16px;">
+      <h1 style="margin:0 0 8px;font-size:1.5rem;">Bingo — elegir sala</h1>
+      <p class="sd-muted" style="margin:0 0 24px;">Salas activas con pantalla pública.</p>
+      <ul id="bd-room-links" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;"></ul>
+      <p id="bd-picker-err" class="sd-err" style="display:none;margin-top:16px;"></p>
+    </div>`;
+  const ul = host.querySelector("#bd-room-links");
+  const errEl = host.querySelector<HTMLParagraphElement>("#bd-picker-err");
+  try {
+    const rooms = await fetchPublicRooms();
+    if (!rooms.length) {
+      if (ul) ul.innerHTML = `<li class="sd-muted">No hay salas activas.</li>`;
+      return;
+    }
+    if (ul) {
+      ul.innerHTML = rooms
+        .map(
+          (r) =>
+            `<li><a class="sd-picker-link" href="/r/${encodeURIComponent(r.slug)}" style="display:block;padding:12px 16px;border-radius:10px;text-decoration:none;color:inherit;background:rgba(255,255,255,0.06);">${esc(r.name)} <span class="mono sd-muted" style="font-size:0.85rem;">/r/${esc(r.slug)}</span></a></li>`,
+        )
+        .join("");
+    }
   } catch (e) {
-    upcomingBody.innerHTML = `<p class="sd-err">${esc(e instanceof Error ? e.message : "Error")}</p>`;
+    if (errEl) {
+      errEl.style.display = "block";
+      errEl.textContent = e instanceof Error ? e.message : "Error";
+    }
   }
 }
 
-void fetchLiveSnapshot()
-  .then((s) => {
-    lastSnap = s;
-    applySnapshot(s);
-    tickClocks(s);
-  })
-  .catch(() => {
-    tickClocks(null);
-  });
+const app = document.querySelector<HTMLDivElement>("#app");
+if (!app) throw new Error("#app missing");
 
-setInterval(() => tickClocks(lastSnap), 1000);
+const pathNorm = (location.pathname.replace(/\/$/, "") || "/") as string;
+const roomMatch = pathNorm.match(/^\/r\/([^/]+)$/);
 
-void renderUpcoming();
-connectEventSource();
+if (roomMatch) {
+  setRoomSlug(decodeURIComponent(roomMatch[1]));
+  mountDisplay(app);
+} else if (pathNorm === "/") {
+  setRoomSlug(null);
+  void renderRoomPicker(app);
+} else {
+  app.innerHTML = `<div class="sd-picker glass" style="max-width:480px;margin:48px auto;padding:24px;"><p>Ruta no válida. <a href="/">Inicio</a></p></div>`;
+}

@@ -10,7 +10,8 @@ ALCANCE
 ---
 LISTADO
 Columnas:
-- Sala (roomName)
+- Sala (Room vinculado)
+- Nombre del bingo (`name`)
 - Tipo (75/90)
 - Estado (ACTIVE/INACTIVE)
 - Inicio (startDateTime)
@@ -18,12 +19,14 @@ Columnas:
 - Precio cartón (cardPrice)
 - Mín. jugadores (minPlayersToStart)
 Filtros:
-- roomName
+- name (contiene, insensible a mayúsculas)
+- roomId
 - status
 - bingoType
 ---
 FORMULARIO
-- roomName
+- roomId (Room)
+- name (título del bingo)
 - status
 - bingoType
 - startDateTime
@@ -33,7 +36,7 @@ FORMULARIO
 - prizes[]: { figure, amount } (una por figura)
 
 MODELO PRINCIPAL
-- Bingo { id, roomName, status, bingoType, startDateTime, repeatEveryMinutes, cardPrice, minPlayersToStart }
+- Bingo { id, roomId, name, status, bingoType, startDateTime, repeatEveryMinutes, cardPrice, minPlayersToStart }
 - BingoPrize { id, bingoId, figure, amount }
 
 BACKEND
