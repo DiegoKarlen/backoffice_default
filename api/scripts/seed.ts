@@ -44,6 +44,15 @@ async function main() {
     },
     update: {},
   });
+  const fBingo = await prisma.functionality.upsert({
+    where: { code: "bo.bingo.manage" },
+    create: {
+      code: "bo.bingo.manage",
+      name: "Manage bingos",
+      module: "game",
+    },
+    update: {},
+  });
 
   let adminRole = await prisma.role.findUnique({
     where: { code: "admin" },
@@ -61,22 +70,25 @@ async function main() {
             { functionality: { connect: { id: fUsers.id } } },
             { functionality: { connect: { id: fRoles.id } } },
             { functionality: { connect: { id: fFunc.id } } },
+            { functionality: { connect: { id: fBingo.id } } },
           ],
         },
       },
       include: { functionalities: true },
     });
     console.log("Created role admin");
-  } else if (adminRole.functionalities.length === 0) {
-    await prisma.roleFunctionality.createMany({
-      data: [
-        { roleId: adminRole.id, functionalityId: fUsers.id },
-        { roleId: adminRole.id, functionalityId: fRoles.id },
-        { roleId: adminRole.id, functionalityId: fFunc.id },
-      ],
-      skipDuplicates: true,
-    });
   }
+
+  /** Siempre enlazar funcionalidades por seed (p. ej. nuevas como Bingo) sin duplicar filas. */
+  await prisma.roleFunctionality.createMany({
+    data: [
+      { roleId: adminRole.id, functionalityId: fUsers.id },
+      { roleId: adminRole.id, functionalityId: fRoles.id },
+      { roleId: adminRole.id, functionalityId: fFunc.id },
+      { roleId: adminRole.id, functionalityId: fBingo.id },
+    ],
+    skipDuplicates: true,
+  });
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
   await prisma.user.upsert({

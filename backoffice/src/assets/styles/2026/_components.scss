@@ -7,6 +7,13 @@
   gap: 32px; margin-bottom: 28px;
   animation: rise-in 600ms cubic-bezier(.2,.7,.2,1) both;
 }
+.hero--compact {
+  align-items: center;
+  margin-bottom: 18px;
+}
+.hero--compact .hero-title {
+  margin: 0;
+}
 .hero-text .eyebrow { display: block; margin-bottom: 10px; }
 .hero-title {
   font-family: 'Inter Tight', 'Inter', sans-serif;
@@ -21,6 +28,215 @@
 .hero-sub { font-size: 14px; color: var(--t-muted); max-width: 60ch; line-height: 1.6; }
 .hero-sub strong { color: var(--success); font-weight: 600; }
 .hero-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Home — upcoming bingos */
+.bo-home-bingo { margin: 8px 0 26px; }
+.bo-home-bingo__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.bo-home-next {
+  position: relative;
+  border-radius: 18px;
+  padding: 0;
+  border: 1px solid color-mix(in oklab, var(--border) 82%, var(--teal) 18%);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  animation: rise-in 640ms cubic-bezier(.2,.7,.2,1) both;
+  animation-delay: 120ms;
+}
+
+/* Capa decorativa suave: aerografía teal/cian — sin violetas */
+.bo-home-next__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 130% 85% at 92% -25%, color-mix(in oklab, var(--teal) 16%, transparent), transparent 58%),
+    radial-gradient(ellipse 100% 70% at -15% 105%, color-mix(in oklab, var(--info) 14%, transparent), transparent 52%),
+    repeating-linear-gradient(
+      -12deg,
+      transparent 0,
+      transparent 11px,
+      color-mix(in oklab, var(--border-soft) 65%, transparent) 11px,
+      color-mix(in oklab, var(--border-soft) 65%, transparent) 12px
+    );
+  mix-blend-mode: multiply;
+}
+
+:root[data-theme="dark"] .bo-home-next__glow {
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+.bo-home-next__inner {
+  position: relative;
+  z-index: 1;
+  border-radius: 17px;
+  padding: 18px 18px 16px;
+  background: transparent;
+}
+
+.bo-home-next__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.bo-home-next__title {
+  font-family: 'Inter Tight', 'Inter', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-size: clamp(20px, 2.2vw, 26px);
+  line-height: 1.15;
+  margin: 6px 0 6px;
+  color: var(--t-base);
+}
+
+.bo-home-next__meta {
+  font-size: 13px;
+  color: var(--t-muted);
+  line-height: 1.45;
+  max-width: 52ch;
+}
+
+.bo-home-badge {
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #fff;
+  background: radial-gradient(circle at 30% 25%, #fff5, transparent 46%),
+    linear-gradient(145deg, var(--teal), color-mix(in oklab, var(--success) 72%, var(--teal)));
+  box-shadow: 0 12px 32px color-mix(in oklab, var(--teal) 30%, transparent);
+  border: 1px solid color-mix(in oklab, #fff 20%, transparent);
+}
+
+.bo-home-countdown {
+  margin-top: 14px;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--border-soft) 90%, var(--teal) 10%);
+  background: color-mix(in oklab, var(--bg-card) 90%, var(--teal-soft) 35%);
+}
+
+.bo-home-countdown__label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-light);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.bo-home-countdown__digits {
+  font-size: clamp(30px, 4.6vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--t-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.bo-home-countdown__sub {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--teal);
+  font-weight: 650;
+}
+
+.bo-home-next__hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--t-muted);
+}
+
+.bo-home-upcoming {
+  min-height: 100%;
+  animation: rise-in 640ms cubic-bezier(.2,.7,.2,1) both;
+  animation-delay: 220ms;
+}
+
+.bo-home-upcoming__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bo-home-upcoming__item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in oklab, var(--bg-card) 94%, var(--teal) 4%);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.bo-home-upcoming__item:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--border) 65%, var(--teal) 28%);
+  box-shadow: var(--shadow-sm);
+}
+
+.bo-home-upcoming__rank {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--t-base);
+  background: color-mix(in oklab, var(--bg-hover) 88%, var(--teal) 9%);
+  border: 1px solid var(--border-soft);
+}
+
+.bo-home-upcoming__name {
+  font-weight: 750;
+  color: var(--t-base);
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.bo-home-upcoming__when {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--t-muted);
+}
+
+.bo-home-upcoming__pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 72%, var(--info) 20%);
+  background: color-mix(in oklab, var(--info-soft) 78%, transparent);
+  color: var(--info);
+}
+
+@media (max-width: 980px) {
+  .bo-home-bingo__grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bo-home-next__glow { opacity: 0.75; }
+}
 
 /* Buttons */
 .btn {
@@ -96,6 +312,29 @@
 }
 .card-action:hover { color: var(--primary-dark); }
 .card-action svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 2.2; fill: none; }
+
+/* Bingo admin — tabbed form */
+.bo-bingo-tab-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.bo-bingo-tab-nav .btn--sm { padding: 6px 10px; font-size: 12px; }
+.bo-bingo-tab-panel[hidden] { display: none !important; }
+.bo-bingo-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+.bo-bingo-filters .field { margin: 0; min-width: 120px; }
+.bo-bingo-filters .field--grow { flex: 1 1 160px; }
+.bo-bingo-prize-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+.bo-bingo-prize-row .field { margin: 0; }
 
 /* Generic 12-column grid */
 .grid {

@@ -58,4 +58,32 @@ export const api = {
     create: (body) => apiJson("/functionalities", { method: "POST", body: JSON.stringify(body) }),
     patch: (id, body) => apiJson(`/functionalities/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   },
+
+  bingos: {
+    list: (query) => {
+      const q = new URLSearchParams();
+      if (query?.roomName) q.set("roomName", query.roomName);
+      if (query?.status) q.set("status", query.status);
+      if (query?.bingoType) q.set("bingoType", query.bingoType);
+      const s = q.toString();
+      return apiJson(`/backoffice/bingos${s ? `?${s}` : ""}`);
+    },
+    get: (id) => apiJson(`/backoffice/bingos/${id}`),
+    create: (body) =>
+      apiJson("/backoffice/bingos", { method: "POST", body: JSON.stringify(body) }),
+    put: (id, body) =>
+      apiJson(`/backoffice/bingos/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    activate: (id) =>
+      apiJson(`/backoffice/bingos/${id}/activate`, { method: "PATCH", body: "{}" }),
+    deactivate: (id) =>
+      apiJson(`/backoffice/bingos/${id}/deactivate`, { method: "PATCH", body: "{}" }),
+    remove: (id) => apiJson(`/backoffice/bingos/${id}`, { method: "DELETE" }),
+    upcoming: (query) => {
+      const q = new URLSearchParams();
+      if (query?.limit != null) q.set("limit", String(query.limit));
+      if (query?.horizonDays != null) q.set("horizonDays", String(query.horizonDays));
+      const s = q.toString();
+      return apiJson(`/backoffice/bingos/upcoming${s ? `?${s}` : ""}`);
+    },
+  },
 };
