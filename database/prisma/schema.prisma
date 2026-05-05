@@ -82,12 +82,35 @@ enum BingoFigure {
   FULL_HOUSE
 }
 
+enum RoomStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// Physical/virtual room: groups one or more bingos.
+model Room {
+  id        String     @id @default(uuid())
+  name      String
+  /// URL segment for the public bingo display: /r/{slug}
+  slug      String     @unique
+  status    RoomStatus @default(INACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  bingos    Bingo[]
+
+  @@index([status])
+}
+
 model Bingo {
   id                 String      @id @default(uuid())
-  roomName           String
+  roomId             String
+  room               Room        @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  name               String
   status             BingoStatus @default(INACTIVE)
   bingoType          BingoType
   startDateTime      DateTime
+  /// Último instante permitido para programar una partida (inicio). Null = sin límite.
+  endDateTime        DateTime?
   repeatEveryMinutes Int?
   cardPrice          Decimal     @db.Decimal(14, 4)
   minPlayersToStart  Int         @default(2)
@@ -98,10 +121,48 @@ model Bingo {
   createdBy          User?       @relation("BingoCreatedBy", fields: [createdByUserId], references: [id])
   updatedBy          User?       @relation("BingoUpdatedBy", fields: [updatedByUserId], references: [id])
   prizes             BingoPrize[]
+  rounds             BingoRound[]
 
   @@index([status])
   @@index([startDateTime])
   @@index([bingoType])
+  @@index([roomId])
+}
+
+enum BingoRoundStatus {
+  SCHEDULED
+  DRAWING
+  COMPLETED
+  CANCELLED
+}
+
+/// Partida concreta (ocurrencia programada); materializada al guardar el bingo para poder asociar cartones antes del sorteo.
+model BingoRound {
+  id        String           @id @default(uuid())
+  bingoId   String
+  bingo     Bingo            @relation(fields: [bingoId], references: [id], onDelete: Cascade)
+  /// Número de partida dentro del bingo (UI “PARTIDA #N”).
+  sequence  Int
+  startsAt  DateTime
+  status    BingoRoundStatus @default(SCHEDULED)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  balls     BingoRoundBall[]
+
+  @@unique([bingoId, startsAt])
+  @@index([bingoId, status])
+  @@index([bingoId, sequence])
+}
+
+model BingoRoundBall {
+  id        String     @id @default(uuid())
+  roundId   String
+  round     BingoRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  drawOrder Int
+  number    Int
+
+  @@unique([roundId, drawOrder])
+  @@index([roundId])
 }
 
 model BingoPrize {

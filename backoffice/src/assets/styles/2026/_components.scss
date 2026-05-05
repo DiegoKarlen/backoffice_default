@@ -324,6 +324,24 @@
 }
 .bo-bingo-tab-nav .btn--sm { padding: 6px 10px; font-size: 12px; }
 .bo-bingo-tab-panel[hidden] { display: none !important; }
+/* List pages — filter toolbar (bingos / rooms) */
+.bo-list-filters {
+  margin-bottom: 0;
+}
+.bo-list-filters__head {
+  margin-bottom: 8px;
+}
+.bo-list-filters__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t-muted);
+}
+.bo-list-filters .bo-bingo-filters {
+  margin-bottom: 16px;
+}
+
 .bo-bingo-filters {
   display: flex;
   flex-wrap: wrap;
@@ -333,6 +351,20 @@
 }
 .bo-bingo-filters .field { margin: 0; min-width: 120px; }
 .bo-bingo-filters .field--grow { flex: 1 1 160px; }
+
+/* Lista bingos / salas: filtros alineados a la derecha, anchos uniformes */
+.bo-bingo-filters--list-align {
+  justify-content: flex-end;
+}
+.bo-bingo-filters--list-align .field {
+  flex: 0 1 190px;
+  min-width: 140px;
+  max-width: 220px;
+  margin: 0;
+}
+.bo-bingo-filters--list-align .btn {
+  flex: 0 0 auto;
+}
 .bo-bingo-prize-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
 .bo-bingo-prize-row .field { margin: 0; }
 
@@ -391,3 +423,102 @@
 .tag.t-unavail   { background: var(--danger-soft);  color: var(--danger); }
 .tag.t-active    { background: var(--success-soft); color: var(--success); }
 .tag.t-info      { background: var(--info-soft);    color: var(--info); }
+
+/* Bingo rounds dialog */
+.bo-bingo-rounds-dialog {
+  border: none;
+  padding: 0;
+  max-width: 920px;
+  width: calc(100vw - 48px);
+  background: transparent;
+  box-shadow: none;
+}
+.bo-bingo-rounds-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.bo-rounds-dialog__surface {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 920px);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.bo-rounds-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.bo-rounds-dialog__head-text {
+  min-width: 0;
+}
+.bo-rounds-dialog__title {
+  margin: 6px 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--t-base);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.bo-rounds-dialog__filters-wrap {
+  padding: 14px 22px 16px;
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border-soft);
+}
+.bo-rounds-dialog__filters.bo-bingo-filters {
+  margin-bottom: 0;
+  align-items: flex-end;
+}
+.bo-rounds-dialog__field-seq {
+  min-width: 140px;
+  max-width: 200px;
+}
+.table .bo-rounds-cell-partida {
+  font-weight: 600;
+  color: var(--t-base);
+}
+.bo-rounds-dialog__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 22px;
+}
+.bo-rounds-dialog__body {
+  padding: 16px 0 20px;
+}
+.bo-rounds-dialog__foot {
+  flex-shrink: 0;
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: var(--bg-card);
+}
+.bo-rounds-table-wrap {
+  overflow: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.bo-rounds-balls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.bo-rounds-ball {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-soft);
+}
+.bo-rounds-empty {
+  color: var(--t-muted);
+  font-size: 13px;
+}

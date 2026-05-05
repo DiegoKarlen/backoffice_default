@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rooms · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="admin-rooms" data-bo-page="rooms">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content" data-bo-rooms-wrap>
+        <div id="bo-rooms-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+        <section class="col-12 card" id="bo-rooms-list-view">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="roomExtra.breadcrumb"></span>
+              <h2 class="card-title" data-i18n="roomExtra.listTitle"></h2>
+            </div>
+            <button type="button" class="btn btn--primary" id="bo-rooms-btn-new" data-i18n="room.btnNew"></button>
+          </div>
+
+          <div class="bo-list-filters">
+            <div class="bo-list-filters__head">
+              <span class="bo-list-filters__title" data-i18n="room.filtersSectionTitle"></span>
+            </div>
+          <form id="bo-room-filters-form" class="bo-bingo-filters bo-bingo-filters--list-align" action="#" method="get">
+            <div class="field field--underline">
+              <label class="field-label" for="room-filter-name" data-i18n="room.filterName"></label>
+              <input id="room-filter-name" class="input input--underline" type="search" autocomplete="off" name="name" data-i18n-placeholder="room.filterNamePlaceholder">
+            </div>
+            <div class="field field--underline">
+              <label class="field-label" for="room-filter-status" data-i18n="room.filterStatus"></label>
+              <select id="room-filter-status" class="input input--underline" name="status">
+                <option value="">—</option>
+                <option value="ACTIVE" data-i18n="room.statusActive"></option>
+                <option value="INACTIVE" data-i18n="room.statusInactive"></option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn--ghost" id="bo-room-filter-apply" data-i18n="room.applyFilters"></button>
+          </form>
+          </div>
+
+          <div style="overflow:auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="room.colName"></th>
+                  <th data-i18n="room.colDisplayUrl"></th>
+                  <th data-i18n="room.colStatus"></th>
+                  <th data-i18n="room.colCreated"></th>
+                  <th style="text-align:right;" data-i18n="room.colActions"></th>
+                </tr>
+              </thead>
+              <tbody id="bo-room-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="bo-room-create-panel" hidden style="margin-bottom:18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="roomExtra.breadcrumb"></span>
+              <h2 class="card-title" data-i18n="roomExtra.createTitle"></h2>
+            </div>
+          </div>
+
+          <form id="bo-room-create-form" class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline">
+                <label class="field-label" for="create-room-name" data-i18n="room.labelName"></label>
+                <input id="create-room-name" class="input input--underline" type="text" required autocomplete="off">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="create-room-slug" data-i18n="room.labelSlug"></label>
+                <input id="create-room-slug" class="input input--underline mono" type="text" required autocomplete="off" pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="64">
+                <p class="field-help" data-i18n="room.helpSlug"></p>
+              </div>
+              <div class="field field--check-cell">
+                <label class="check">
+                  <input id="create-room-active" type="checkbox">
+                  <span class="box"></span>
+                  <span data-i18n="room.labelActive"></span>
+                </label>
+              </div>
+            </div>
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-room-create-cancel" data-i18n="room.cancel"></button>
+              <button type="submit" class="btn btn--primary" data-i18n="bingoExtra.saveChanges"></button>
+            </div>
+          </form>
+        </section>
+
+        <section class="col-12 card" id="bo-room-edit-panel" hidden>
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="roomExtra.breadcrumb"></span>
+              <h2 class="card-title" id="bo-room-edit-heading"></h2>
+            </div>
+          </div>
+          <div class="bo-form-profile">
+            <div class="bo-form-profile__grid">
+              <div class="field field--underline">
+                <label class="field-label" for="edit-room-name" data-i18n="room.labelName"></label>
+                <input id="edit-room-name" class="input input--underline" type="text" required autocomplete="off">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="edit-room-slug" data-i18n="room.labelSlug"></label>
+                <input id="edit-room-slug" class="input input--underline mono" type="text" required autocomplete="off" pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="64">
+                <p class="field-help" data-i18n="room.helpSlug"></p>
+              </div>
+              <div class="field field--check-cell">
+                <label class="check">
+                  <input id="edit-room-active" type="checkbox">
+                  <span class="box"></span>
+                  <span data-i18n="room.labelActive"></span>
+                </label>
+              </div>
+            </div>
+            <div class="bo-form-profile__actions">
+              <button type="button" class="bo-form-profile__cancel" id="bo-room-edit-cancel" data-i18n="room.cancel"></button>
+              <button type="button" class="btn btn--primary" id="bo-room-edit-save" data-i18n="bingoExtra.saveChanges"></button>
+            </div>
+          </div>
+        </section>
+
+        <div data-shell-footer></div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

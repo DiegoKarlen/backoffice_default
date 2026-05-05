@@ -9,7 +9,7 @@ export type UpcomingPrize = {
 
 export type UpcomingOccurrence = {
   bingoId: string;
-  roomName: string;
+  name: string;
   bingoType: BingoType;
   cardPrice: string;
   startsAt: string;
@@ -46,23 +46,26 @@ function nextOccurrenceAfter(params: {
   return new Date(nextMs);
 }
 
-function upcomingRunsForBingo(params: {
+/** Expanded occurrences for one bingo (used by agenda + `syncScheduledRoundsForBingo`). */
+export function upcomingRunsForBingo(params: {
   bingoId: string;
-  roomName: string;
+  name: string;
   bingoType: BingoType;
   cardPrice: Prisma.Decimal;
   startDateTime: Date;
+  endDateTime: Date | null;
   repeatEveryMinutes: number | null;
   now: Date;
   horizonMs: number;
   maxRuns: number;
-}): Array<{ bingoId: string; roomName: string; bingoType: BingoType; cardPrice: string; startsAt: Date }> {
+}): Array<{ bingoId: string; name: string; bingoType: BingoType; cardPrice: string; startsAt: Date }> {
   const {
     bingoId,
-    roomName,
+    name,
     bingoType,
     cardPrice,
     startDateTime,
+    endDateTime,
     repeatEveryMinutes,
     now,
     horizonMs,
@@ -71,25 +74,28 @@ function upcomingRunsForBingo(params: {
 
   const out: Array<{
     bingoId: string;
-    roomName: string;
+    name: string;
     bingoType: BingoType;
     cardPrice: string;
     startsAt: Date;
   }> = [];
 
   const nowMs = now.getTime();
-  const limitMs = nowMs + horizonMs;
+  const endMs = endDateTime ? endDateTime.getTime() : null;
+  const limitMs = endMs != null ? Math.min(nowMs + horizonMs, endMs) : nowMs + horizonMs;
 
   const first = nextOccurrenceAfter({ startDateTime, repeatEveryMinutes, now });
   if (!first) return out;
+  if (endMs != null && first.getTime() > endMs) return out;
 
   let cur = first.getTime();
   let guard = 0;
   while (cur <= limitMs && out.length < maxRuns && guard < 50_000) {
     guard += 1;
+    if (endMs != null && cur > endMs) break;
     out.push({
       bingoId,
-      roomName,
+      name,
       bingoType,
       cardPrice: cardPrice.toString(),
       startsAt: new Date(cur),
@@ -107,11 +113,36 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.trunc(n)));
 }
 
+export type BuildUpcomingOptions = {
+  /** When set, only bingos linked to this room are included. */
+  roomId?: string;
+};
+
 /**
  * Shared payload for GET /backoffice/bingos/upcoming (auth) and GET /public/bingos/upcoming (no auth).
  */
-export async function buildUpcomingPayload(q: Request["query"], nowInput?: Date): Promise<UpcomingPayload> {
+export async function buildUpcomingPayload(
+  q: Request["query"],
+  nowInput?: Date,
+  options?: BuildUpcomingOptions,
+): Promise<UpcomingPayload> {
   const now = nowInput ?? new Date();
+
+  let roomIdFilter = options?.roomId;
+  if (!roomIdFilter) {
+    const roomSlug = typeof q.roomSlug === "string" ? q.roomSlug.trim() : "";
+    if (roomSlug) {
+      const room = await prisma.room.findFirst({ where: { slug: roomSlug } });
+      if (!room) {
+        return {
+          serverTime: now.toISOString(),
+          next: null,
+          upcoming: [],
+        };
+      }
+      roomIdFilter = room.id;
+    }
+  }
 
   const horizonDaysRaw =
     typeof q.horizonDays === "string" ? Number(q.horizonDays) : typeof q.h === "string" ? Number(q.h) : 14;
@@ -124,9 +155,12 @@ export async function buildUpcomingPayload(q: Request["query"], nowInput?: Date)
   const perBingoMax = clampInt(Math.ceil(maxTotal / 4) + 8, 4, 48);
 
   const rows = await prisma.bingo.findMany({
-    where: { status: BingoStatus.ACTIVE },
-    orderBy: [{ startDateTime: "asc" }, { roomName: "asc" }],
-    include: { prizes: { orderBy: { figure: "asc" } } },
+    where: {
+      status: BingoStatus.ACTIVE,
+      ...(roomIdFilter ? { roomId: roomIdFilter } : {}),
+    },
+    orderBy: [{ startDateTime: "asc" }, { name: "asc" }],
+    include: { prizes: { orderBy: { figure: "asc" } }, room: true },
   });
 
   const occurrences: UpcomingOccurrence[] = [];
@@ -134,10 +168,11 @@ export async function buildUpcomingPayload(q: Request["query"], nowInput?: Date)
   for (const b of rows) {
     const runs = upcomingRunsForBingo({
       bingoId: b.id,
-      roomName: b.roomName,
+      name: b.name,
       bingoType: b.bingoType,
       cardPrice: b.cardPrice,
       startDateTime: b.startDateTime,
+      endDateTime: b.endDateTime,
       repeatEveryMinutes: b.repeatEveryMinutes,
       now,
       horizonMs,
@@ -151,7 +186,7 @@ export async function buildUpcomingPayload(q: Request["query"], nowInput?: Date)
     for (const r of runs) {
       occurrences.push({
         bingoId: r.bingoId,
-        roomName: r.roomName,
+        name: b.name,
         bingoType: r.bingoType,
         cardPrice: r.cardPrice,
         startsAt: r.startsAt.toISOString(),

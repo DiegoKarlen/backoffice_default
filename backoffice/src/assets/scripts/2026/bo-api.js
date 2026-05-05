@@ -59,9 +59,31 @@ export const api = {
     patch: (id, body) => apiJson(`/functionalities/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   },
 
+  rooms: {
+    list: (query) => {
+      const q = new URLSearchParams();
+      if (query?.name) q.set("name", query.name);
+      if (query?.status) q.set("status", query.status);
+      const s = q.toString();
+      return apiJson(`/backoffice/rooms${s ? `?${s}` : ""}`);
+    },
+    get: (id) => apiJson(`/backoffice/rooms/${id}`),
+    create: (body) =>
+      apiJson("/backoffice/rooms", { method: "POST", body: JSON.stringify(body) }),
+    put: (id, body) =>
+      apiJson(`/backoffice/rooms/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    activate: (id) =>
+      apiJson(`/backoffice/rooms/${id}/activate`, { method: "PATCH", body: "{}" }),
+    deactivate: (id) =>
+      apiJson(`/backoffice/rooms/${id}/deactivate`, { method: "PATCH", body: "{}" }),
+    remove: (id) => apiJson(`/backoffice/rooms/${id}`, { method: "DELETE" }),
+  },
+
   bingos: {
     list: (query) => {
       const q = new URLSearchParams();
+      if (query?.name) q.set("name", query.name);
+      if (query?.roomId) q.set("roomId", query.roomId);
       if (query?.roomName) q.set("roomName", query.roomName);
       if (query?.status) q.set("status", query.status);
       if (query?.bingoType) q.set("bingoType", query.bingoType);
@@ -78,6 +100,17 @@ export const api = {
     deactivate: (id) =>
       apiJson(`/backoffice/bingos/${id}/deactivate`, { method: "PATCH", body: "{}" }),
     remove: (id) => apiJson(`/backoffice/bingos/${id}`, { method: "DELETE" }),
+    rounds: (id, query) => {
+      const q = new URLSearchParams();
+      if (query?.from) q.set("from", query.from);
+      if (query?.to) q.set("to", query.to);
+      if (query?.sequence != null && query.sequence !== "") q.set("sequence", String(query.sequence));
+      if (query?.status) q.set("status", query.status);
+      if (query?.limit != null && query.limit !== "") q.set("limit", String(query.limit));
+      if (query?.sort) q.set("sort", query.sort);
+      const s = q.toString();
+      return apiJson(`/backoffice/bingos/${id}/rounds${s ? `?${s}` : ""}`);
+    },
     upcoming: (query) => {
       const q = new URLSearchParams();
       if (query?.limit != null) q.set("limit", String(query.limit));

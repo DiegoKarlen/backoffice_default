@@ -11,6 +11,7 @@ const SPA_FILES = new Set([
   "admin-users.html",
   "admin-roles.html",
   "admin-functionalities.html",
+  "admin-rooms.html",
   "admin-bingos.html",
 ]);
 
