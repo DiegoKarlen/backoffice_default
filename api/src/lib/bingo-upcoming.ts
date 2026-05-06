@@ -15,6 +15,8 @@ export type UpcomingOccurrence = {
   startsAt: string;
   startsAtMs: number;
   prizes: UpcomingPrize[];
+  /** `BingoRound.sequence` cuando la partida ya está materializada */
+  roundSequence: number | null;
 };
 
 export type UpcomingPayload = {
@@ -163,7 +165,8 @@ export async function buildUpcomingPayload(
     include: { prizes: { orderBy: { figure: "asc" } }, room: true },
   });
 
-  const occurrences: UpcomingOccurrence[] = [];
+  type OccurrenceDraft = Omit<UpcomingOccurrence, "roundSequence">;
+  const occurrences: OccurrenceDraft[] = [];
 
   for (const b of rows) {
     const runs = upcomingRunsForBingo({
@@ -197,9 +200,33 @@ export async function buildUpcomingPayload(
   }
 
   occurrences.sort((a, b) => a.startsAtMs - b.startsAtMs);
-  const trimmed = occurrences.slice(0, maxTotal);
+  const trimmedRaw = occurrences.slice(0, maxTotal);
 
-  const next = trimmed.length ? trimmed[0] : null;
+  let trimmed: UpcomingOccurrence[] = [];
+  if (trimmedRaw.length > 0) {
+    const rounds = await prisma.bingoRound.findMany({
+      where: {
+        OR: trimmedRaw.map((o) => ({
+          bingoId: o.bingoId,
+          startsAt: new Date(o.startsAtMs),
+        })),
+      },
+      select: { bingoId: true, startsAt: true, sequence: true },
+    });
+    const seqMap = new Map(
+      rounds.map((r) => [`${r.bingoId}:${r.startsAt.getTime()}`, r.sequence] as const),
+    );
+    trimmed = trimmedRaw.map((o) => ({
+      ...o,
+      roundSequence: seqMap.get(`${o.bingoId}:${o.startsAtMs}`) ?? null,
+    }));
+  }
+
+  /** Solo citas estrictamente futuras: evita que la ranura que acaba de empezar quede primera en la lista. */
+  const nowMs = now.getTime();
+  trimmed = trimmed.filter((o) => o.startsAtMs > nowMs);
+
+  const next = trimmed.length ? trimmed[0]! : null;
 
   return {
     serverTime: now.toISOString(),
