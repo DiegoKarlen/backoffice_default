@@ -1,0 +1,28 @@
+{
+  "background": "backgrounds/bingo-broadcast-bg-1920x1080.webp",
+  "machine": "bolillero/bolillero-transparent-1100x850.png",
+  "tubeOverlay": "bolillero/tube-overlay-transparent-1100x850.png",
+  "ballsPattern": "balls/numbered/ball-{number:02d}.png",
+  "trajectory1920x1080": [
+    {
+      "x": 756,
+      "y": 565
+    },
+    {
+      "x": 758,
+      "y": 620
+    },
+    {
+      "x": 746,
+      "y": 682
+    },
+    {
+      "x": 718,
+      "y": 750
+    },
+    {
+      "x": 686,
+      "y": 818
+    }
+  ]
+}

@@ -15,6 +15,8 @@ export type Occurrence = {
   startsAt: string;
   startsAtMs: number;
   prizes: OccurrencePrize[];
+  /** Número de partida (backend); puede ser null si aún no hay fila en BingoRound */
+  roundSequence: number | null;
 };
 
 export type UpcomingResponse = {
@@ -77,9 +79,9 @@ export async function fetchUpcoming(params?: { limit?: number; horizonDays?: num
   return res.json() as Promise<UpcomingResponse>;
 }
 
-export async function fetchLiveSnapshot(): Promise<LiveSnapshot> {
+export async function fetchLiveSnapshot(signal?: AbortSignal): Promise<LiveSnapshot> {
   const url = publicBingosPath("/live/state");
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Live: ${res.status}`);
   return res.json() as Promise<LiveSnapshot>;
 }

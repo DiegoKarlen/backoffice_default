@@ -15,6 +15,20 @@ function envMs(key: string, fallback: number): number {
 let drawIntervalMs = envMs("BINGO_DRAW_INTERVAL_MS", 2200);
 if (drawIntervalMs < 300) drawIntervalMs = 300;
 
+/**
+ * Cliente: cuenta 3-2-1 y luego pantalla de sorteo; tras `ROUND_POST_COUNTDOWN_WAIT_MS` sale la 1ª bola.
+ * Defaults alineados con `broadcast-manifest.ts` (ROUND_OPENING_TOTAL_MS).
+ */
+const ROUND_COUNTDOWN_UI_MS = 5400; /* 3 × ROUND_COUNTDOWN_STEP_MS */
+const ROUND_POST_COUNTDOWN_WAIT_MS = envMs(
+  "BINGO_ROUND_POST_COUNTDOWN_WAIT_MS",
+  envMs("BINGO_ROUND_BOLILLERO_BEAT_MS", 2000),
+);
+const ROUND_INTRO_MS = envMs(
+  "BINGO_ROUND_INTRO_MS",
+  ROUND_COUNTDOWN_UI_MS + ROUND_POST_COUNTDOWN_WAIT_MS,
+);
+
 /** Si no hay ocurrencias en horizonte, reconsultar la agenda cada tantos ms. */
 const IDLE_POLL_MS = envMs("BINGO_SCHEDULER_POLL_MS", 60_000);
 
@@ -57,6 +71,7 @@ const sessions = new Map<string, BingoLiveSession>();
 class BingoLiveSession {
   private phase: Phase = "idle";
   private drawTimer: ReturnType<typeof setInterval> | null = null;
+  private roundIntroTimeout: ReturnType<typeof setTimeout> | null = null;
   private kickTimer: ReturnType<typeof setTimeout> | null = null;
   private idlePollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -78,6 +93,9 @@ class BingoLiveSession {
   /** Próximo evento que estamos esperando (para snapshot / UI). */
   private nextKick: UpcomingOccurrence | null = null;
 
+  /** Durante sorteo: siguiente ocurrencia en agenda después de la partida actual (para contador «próximo sorteo»). */
+  private followingKick: UpcomingOccurrence | null = null;
+
   private currentRoundId: string | null = null;
   private currentRoundSequence: number | null = null;
 
@@ -89,7 +107,15 @@ class BingoLiveSession {
     private readonly roomTitle: string,
   ) {}
 
+  private clearRoundIntroTimeout(): void {
+    if (this.roundIntroTimeout) {
+      clearTimeout(this.roundIntroTimeout);
+      this.roundIntroTimeout = null;
+    }
+  }
+
   private clearDrawTimer(): void {
+    this.clearRoundIntroTimeout();
     if (this.drawTimer) {
       clearInterval(this.drawTimer);
       this.drawTimer = null;
@@ -133,14 +159,19 @@ class BingoLiveSession {
       sched &&
       roundId != null &&
       this.currentRoundSequence != null;
+    const nextSched =
+      this.phase === "drawing" ? this.followingKick?.startsAt ?? null : this.nextKick?.startsAt ?? null;
+    const nextNm =
+      this.phase === "drawing" ? this.followingKick?.name ?? null : this.nextKick?.name ?? null;
+
     return {
       phase: this.phase,
       serverTime: new Date().toISOString(),
       drawIntervalMs,
       roomSlug: this.roomSlug,
       roomTitle: this.roomTitle,
-      nextScheduledAt: this.nextKick?.startsAt ?? null,
-      nextName: this.nextKick?.name ?? null,
+      nextScheduledAt: nextSched,
+      nextName: nextNm,
       current:
         !hasCtx
           ? null
@@ -177,11 +208,22 @@ class BingoLiveSession {
     }
   }
 
+  /** Siguiente slot en agenda después de `afterStartsAtMs` (misma sala). */
+  private async refreshFollowingKick(afterStartsAtMs: number): Promise<void> {
+    const payload = await buildUpcomingPayload(
+      { limit: "500", horizonDays: "60" } as Request["query"],
+      new Date(),
+      { roomId: this.roomId },
+    );
+    this.followingKick = payload.upcoming.find((o) => o.startsAtMs > afterStartsAtMs) ?? null;
+  }
+
   /** Programa el siguiente inicio según agenda filtrada por esta sala. */
   private async scheduleNextWake(): Promise<void> {
     this.clearKickTimer();
     this.clearIdlePollTimer();
     this.nextKick = null;
+    this.followingKick = null;
 
     const payload = await buildUpcomingPayload(
       { limit: "500", horizonDays: "60" } as Request["query"],
@@ -304,6 +346,7 @@ class BingoLiveSession {
     this.drawn = [];
     this.phase = "drawing";
     this.nextKick = null;
+    await this.refreshFollowingKick(occ.startsAtMs);
 
     this.broadcast("round_start", {
       bingoId: row.id,
@@ -317,8 +360,11 @@ class BingoLiveSession {
     this.broadcast("state", this.getSnapshot());
 
     this.clearDrawTimer();
-    this.drawTimer = setInterval(() => this.tickDraw(), drawIntervalMs);
-    this.tickDraw();
+    this.roundIntroTimeout = setTimeout(() => {
+      this.roundIntroTimeout = null;
+      this.tickDraw();
+      this.drawTimer = setInterval(() => this.tickDraw(), drawIntervalMs);
+    }, ROUND_INTRO_MS);
   }
 
   private endRound(): void {
@@ -354,8 +400,11 @@ class BingoLiveSession {
     this.currentPrizes = null;
     this.queue = [];
     this.drawn = [];
+    this.followingKick = null;
 
-    this.broadcast("state", this.getSnapshot());
+    /** No emitir `state` aquí: en idle tras un sorteo `nextKick` aún no está relleno hasta que
+     *  termina `scheduleNextWake()` (async). El estado previo haría `nextScheduledAt`/`nextName`
+     * null en clients. El `state` correcto lo envía `scheduleNextWake` o `beginScheduledRound`. */
 
     const pending = this.pendingOcc;
     this.pendingOcc = null;
@@ -426,6 +475,7 @@ class BingoLiveSession {
     this.phase = "idle";
     this.pendingOcc = null;
     this.nextKick = null;
+    this.followingKick = null;
     this.lastPlayedStartsAtMs = null;
     this.currentRoundId = null;
     this.currentRoundSequence = null;
