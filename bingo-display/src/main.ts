@@ -189,6 +189,168 @@ const FIGURE_LABEL: Record<string, string> = {
   FULL_HOUSE: "Premio cartón lleno",
 };
 
+/** Payload SSE `prize_awarded` (API `PrizeAwardBroadcastPayload`). */
+type PrizeAwardedSsePayload = {
+  bingoRoundId: string;
+  bingoId: string;
+  playerId: string;
+  playerUsername: string;
+  playerRoundCardId: string;
+  bingoPrizeId: string;
+  figure: string;
+  amountCents?: number;
+  payoutId?: string;
+  deferredSettlement?: boolean;
+};
+
+function formatPrizeArs(cents: number): string {
+  const pesos = cents / 100;
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(pesos);
+}
+
+const prizeToastQueue: PrizeAwardedSsePayload[] = [];
+let prizeToastPlaying = false;
+let prizeToastTimer: ReturnType<typeof setTimeout> | null = null;
+const PRIZE_TOAST_MS = 9000;
+/** Cartón lleno: más tiempo + fase “acreditando” antes de mostrar monto. */
+const PRIZE_TOAST_FULL_HOUSE_MS = 10_500;
+const PRIZE_PAYING_PHASE_MS = 1600;
+
+/**
+ * Tras `FULL_HOUSE`, el servidor pasa a idle y la UI cerraba el sorteo al instante.
+ * Retrasamos el pipeline de cierre hasta que termine la celebración del premio (y el pago ya ocurrió en API).
+ */
+let bingoCloseHoldUntilMs = 0;
+const BINGO_CLOSE_AFTER_FULL_HOUSE_MS = 11_200;
+let bingoCloseHoldTimer: ReturnType<typeof setTimeout> | null = null;
+
+function requestCloseHoldForFullHousePrize(): void {
+  const until = performance.now() + BINGO_CLOSE_AFTER_FULL_HOUSE_MS;
+  bingoCloseHoldUntilMs = Math.max(bingoCloseHoldUntilMs, until);
+}
+
+function clearBingoCloseHold(): void {
+  bingoCloseHoldUntilMs = 0;
+  if (bingoCloseHoldTimer !== null) {
+    clearTimeout(bingoCloseHoldTimer);
+    bingoCloseHoldTimer = null;
+  }
+}
+
+function hidePrizeToast(): void {
+  const el = document.querySelector<HTMLElement>("#bd-prize-toast");
+  const payingEl = document.querySelector<HTMLElement>("#bd-prize-toast-paying");
+  const detailEl = document.querySelector<HTMLElement>("#bd-prize-toast-detail");
+  if (payingEl) {
+    payingEl.hidden = true;
+    payingEl.classList.remove("bd-prize-toast__paying--pulse");
+  }
+  if (detailEl) detailEl.hidden = false;
+  if (el) {
+    el.hidden = true;
+    el.classList.remove("bd-prize-toast--visible");
+  }
+}
+
+function displayPrizeToastPayload(p: PrizeAwardedSsePayload): void {
+  const root = document.querySelector<HTMLElement>("#bd-prize-toast");
+  const badgeEl = document.querySelector<HTMLElement>("#bd-prize-toast-badge");
+  const payingEl = document.querySelector<HTMLElement>("#bd-prize-toast-paying");
+  const detailEl = document.querySelector<HTMLElement>("#bd-prize-toast-detail");
+  const figEl = document.querySelector<HTMLElement>("#bd-prize-toast-figure");
+  const winEl = document.querySelector<HTMLElement>("#bd-prize-toast-winner");
+  const amtEl = document.querySelector<HTMLElement>("#bd-prize-toast-amount");
+  if (!root || !badgeEl || !figEl || !winEl || !amtEl) return;
+
+  const deferred = p.deferredSettlement === true;
+  const isFullHouse = p.figure === "FULL_HOUSE";
+
+  figEl.textContent = FIGURE_LABEL[p.figure] ?? p.figure;
+  winEl.textContent = p.playerUsername?.trim() ? p.playerUsername : "Jugador";
+  amtEl.textContent = deferred ? "Liquidación al finalizar el sorteo" : formatPrizeArs(Number.isFinite(p.amountCents ?? NaN) ? (p.amountCents as number) : 0);
+
+  if (isFullHouse && payingEl && detailEl) {
+    const reduced =
+      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const payingMs = reduced ? 0 : PRIZE_PAYING_PHASE_MS;
+    badgeEl.textContent = "¡BINGO!";
+    payingEl.textContent = deferred
+      ? "El importe se define al cerrar el sorteo…"
+      : "Acreditando premio al jugador…";
+    payingEl.hidden = false;
+    detailEl.hidden = true;
+    if (!reduced) payingEl.classList.add("bd-prize-toast__paying--pulse");
+    window.setTimeout(() => {
+      payingEl.hidden = true;
+      payingEl.classList.remove("bd-prize-toast__paying--pulse");
+      detailEl.hidden = false;
+    }, payingMs);
+  } else {
+    badgeEl.textContent = "¡Premio!";
+    if (payingEl) {
+      payingEl.hidden = true;
+      payingEl.classList.remove("bd-prize-toast__paying--pulse");
+    }
+    if (detailEl) detailEl.hidden = false;
+  }
+
+  root.hidden = false;
+  root.classList.remove("bd-prize-toast--visible");
+  void root.offsetWidth;
+  requestAnimationFrame(() => {
+    root.classList.add("bd-prize-toast--visible");
+  });
+}
+
+function processPrizeToastQueue(): void {
+  if (prizeToastPlaying) return;
+  const p = prizeToastQueue.shift();
+  if (!p) return;
+
+  prizeToastPlaying = true;
+  displayPrizeToastPayload(p);
+  const durationMs = p.figure === "FULL_HOUSE" ? PRIZE_TOAST_FULL_HOUSE_MS : PRIZE_TOAST_MS;
+
+  if (prizeToastTimer !== null) {
+    clearTimeout(prizeToastTimer);
+    prizeToastTimer = null;
+  }
+
+  prizeToastTimer = window.setTimeout(() => {
+    prizeToastTimer = null;
+    prizeToastPlaying = false;
+    hidePrizeToast();
+    processPrizeToastQueue();
+  }, durationMs);
+}
+
+function enqueuePrizeToast(p: PrizeAwardedSsePayload): void {
+  if (p.figure === "FULL_HOUSE") {
+    requestCloseHoldForFullHousePrize();
+  }
+  prizeToastQueue.push(p);
+  processPrizeToastQueue();
+}
+
+function isPrizeAwardedPayload(x: unknown): x is PrizeAwardedSsePayload {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  if (
+    typeof o.playerUsername !== "string" ||
+    typeof o.figure !== "string" ||
+    typeof o.playerId !== "string"
+  ) {
+    return false;
+  }
+  if (o.deferredSettlement === true) return true;
+  return typeof o.amountCents === "number";
+}
+
 function formatMoney(amount: string): string {
   const normalized = amount.replace(",", ".").trim();
   const n = Number(normalized);
@@ -277,6 +439,7 @@ function pushBingoCloseTimeout(fn: () => void, ms: number): void {
 
 function cancelBingoClosing(): void {
   bingoClosePipelineActive = false;
+  clearBingoCloseHold();
   if (bingoCloseRafId !== 0) {
     cancelAnimationFrame(bingoCloseRafId);
     bingoCloseRafId = 0;
@@ -788,7 +951,12 @@ function applySnapshotInner(s: LiveSnapshot): void {
 
   const roomLine = document.querySelector<HTMLElement>("#bd-room-line");
   if (roomLine) {
-    roomLine.textContent = cur ? cur.name : s.roomTitle || "—";
+    roomLine.textContent = s.roomTitle?.trim() ? s.roomTitle : "—";
+  }
+
+  const bingoNameEl = document.querySelector<HTMLElement>("#bd-bingo-name");
+  if (bingoNameEl) {
+    bingoNameEl.textContent = cur?.name?.trim() ? cur.name : "—";
   }
 
   const matchId = document.querySelector<HTMLSpanElement>("#bd-match-id");
@@ -803,7 +971,9 @@ function applySnapshotInner(s: LiveSnapshot): void {
   const nextBanner = document.querySelector<HTMLParagraphElement>("#bd-next-banner");
   if (nextBanner) {
     if (!live && s.nextScheduledAt && s.nextName) {
-      nextBanner.innerHTML = `PRÓXIMO SORTEO · <span class="mono">${esc(s.nextName)}</span> · ${esc(formatWhen(s.nextScheduledAt))}`;
+      const sala = s.roomTitle?.trim() ? esc(s.roomTitle) : "—";
+      const bingo = esc(s.nextName);
+      nextBanner.innerHTML = `PRÓXIMO SORTEO · <span class="mono">${sala}</span> · <span class="mono">${bingo}</span> · ${esc(formatWhen(s.nextScheduledAt))}`;
       nextBanner.hidden = false;
     } else if (!live) {
       nextBanner.textContent = "Sin partidas programadas en el horizonte.";
@@ -813,17 +983,21 @@ function applySnapshotInner(s: LiveSnapshot): void {
     }
   }
 
-  const idleRoom = document.querySelector<HTMLParagraphElement>("#bd-idle-room");
+  const idleSala = document.querySelector<HTMLParagraphElement>("#bd-idle-sala");
+  const idleBingo = document.querySelector<HTMLParagraphElement>("#bd-idle-bingo");
   const idleWhen = document.querySelector<HTMLParagraphElement>("#bd-idle-when");
-  if (idleRoom && idleWhen) {
+  if (idleSala) {
+    idleSala.textContent = s.roomTitle?.trim() ? s.roomTitle : "—";
+  }
+  if (idleBingo && idleWhen) {
     if (!live && s.nextScheduledAt && s.nextName) {
-      idleRoom.textContent = s.nextName;
+      idleBingo.textContent = s.nextName;
       idleWhen.textContent = formatWhen(s.nextScheduledAt);
     } else if (!live) {
-      idleRoom.textContent = "Sin agenda próxima";
+      idleBingo.textContent = "Sin agenda próxima";
       idleWhen.textContent = "";
     } else {
-      idleRoom.textContent = "";
+      idleBingo.textContent = "";
       idleWhen.textContent = "";
     }
   }
@@ -924,12 +1098,25 @@ function applySnapshot(s: LiveSnapshot): void {
 
   if (!live && lastAppliedPhase === "drawing") {
     if (bingoClosePipelineActive) return;
+    const remainHold = bingoCloseHoldUntilMs - performance.now();
+    if (remainHold > 0) {
+      if (bingoCloseHoldTimer !== null) clearTimeout(bingoCloseHoldTimer);
+      bingoCloseHoldTimer = window.setTimeout(() => {
+        bingoCloseHoldTimer = null;
+        bingoCloseHoldUntilMs = 0;
+        if (lastSnap?.phase === "idle" && lastAppliedPhase === "drawing" && !bingoClosePipelineActive) {
+          scheduleBingoCloseSequence();
+        }
+      }, remainHold);
+      return;
+    }
     scheduleBingoCloseSequence();
     return;
   }
 
   if (live && lastAppliedPhase === "idle") {
     cancelBingoClosing();
+    clearBingoCloseHold();
     roundOpeningHoldApply = true;
     applySnapshotInner(s);
     lastAppliedPhase = s.phase;
@@ -1060,11 +1247,15 @@ const DISPLAY_MARKUP = `
           <span class="bd-hcard__v" id="bd-clock">00:00:00</span>
         </div>
         <div class="bd-hcard bd-hcard--meta sd-show-live">
-          <span class="bd-hcard__k">ROOM</span>
+          <span class="bd-hcard__k">SALA</span>
           <span class="bd-hcard__v mono" id="bd-room-line">—</span>
         </div>
         <div class="bd-hcard bd-hcard--meta sd-show-live">
-          <span class="bd-hcard__k">TIPO DE BINGO</span>
+          <span class="bd-hcard__k">BINGO</span>
+          <span class="bd-hcard__v mono" id="bd-bingo-name">—</span>
+        </div>
+        <div class="bd-hcard bd-hcard--meta sd-show-live">
+          <span class="bd-hcard__k">TIPO</span>
           <span class="bd-hcard__v mono" id="bd-bingo-type">—</span>
         </div>
         <div class="bd-hcard bd-hcard--meta sd-show-live">
@@ -1082,21 +1273,18 @@ const DISPLAY_MARKUP = `
 
     <section class="bd-idle sd-show-idle" aria-label="Próximo sorteo">
       <p class="bd-idle__kicker">Próximo sorteo</p>
-      <p class="bd-idle__room mono" id="bd-idle-room">—</p>
+      <p class="bd-idle__sala mono" id="bd-idle-sala">—</p>
+      <p class="bd-idle__bingo mono" id="bd-idle-bingo">—</p>
       <p class="bd-idle__when mono" id="bd-idle-when"></p>
       <div class="bd-idle__cd mono" id="bd-idle-cd">—</div>
       <p class="bd-idle__sub">Tiempo restante para el inicio</p>
     </section>
 
-    <aside class="bd-rail bd-rail--izq sd-show-live" aria-label="Premios y métricas">
+    <aside class="bd-rail bd-rail--izq sd-show-live" aria-label="Premios">
       <div class="bd-rail-block">
         <h2 class="bd-rail-title">Premios</h2>
         <div class="bd-prizes-stack" id="bd-prizes"></div>
       </div>
-      <article class="bd-card bd-card--metric">
-        <span class="bd-card__label">Jugadores conectados</span>
-        <strong class="bd-card__value mono" id="bd-stat-players">—</strong>
-      </article>
     </aside>
 
     <aside class="bd-rail bd-rail--der sd-show-live" aria-label="Próximos sorteos">
@@ -1123,6 +1311,21 @@ const DISPLAY_MARKUP = `
       <div class="bd-round-intro__backdrop" aria-hidden="true"></div>
       <div class="bd-round-intro__center">
         <span id="bd-round-intro-num" class="bd-round-intro__num mono" aria-live="assertive"></span>
+      </div>
+    </div>
+
+    <div id="bd-prize-toast" class="bd-prize-toast" hidden aria-live="polite" aria-atomic="true">
+      <div class="bd-prize-toast__panel">
+        <span id="bd-prize-toast-badge" class="bd-prize-toast__badge">¡Premio!</span>
+        <p id="bd-prize-toast-paying" class="bd-prize-toast__paying" hidden>Acreditando premio al jugador…</p>
+        <div id="bd-prize-toast-detail">
+          <p class="bd-prize-toast__line">
+            <span id="bd-prize-toast-figure" class="bd-prize-toast__figure"></span>
+            <span class="bd-prize-toast__sep">·</span>
+            <span id="bd-prize-toast-winner" class="bd-prize-toast__winner mono"></span>
+          </p>
+          <p id="bd-prize-toast-amount" class="bd-prize-toast__amount mono"></p>
+        </div>
       </div>
     </div>
   </div>
@@ -1162,6 +1365,17 @@ function connectEventSource(): void {
   es.addEventListener("idle", () => {
     fetchAndApplyLiveSnapshot();
     refreshUpcomingPanel?.();
+  });
+
+  es.addEventListener("prize_awarded", (ev) => {
+    try {
+      const raw = JSON.parse((ev as MessageEvent).data) as unknown;
+      if (isPrizeAwardedPayload(raw)) {
+        enqueuePrizeToast(raw);
+      }
+    } catch {
+      /* ignore */
+    }
   });
 
   es.onerror = () => {
@@ -1211,7 +1425,8 @@ function mountDisplay(host: HTMLElement): void {
           <li class="bd-up-card">
             <span class="bd-up-card__badge mono">${idx + 1}</span>
             <div class="bd-up-card__body">
-              <span class="bd-up-card__partida mono">PARTIDA #${r.roundSequence != null ? esc(String(r.roundSequence)) : "—"}</span>
+              <span class="bd-up-card__bingo">${esc(r.name)}</span>
+              <span class="bd-up-card__partida mono">Partida #${r.roundSequence != null ? esc(String(r.roundSequence)) : "—"}</span>
               <span class="bd-up-card__time mono">${esc(formatUpcomingStart(r.startsAt))}</span>
               <span class="bd-up-card__cd mono">en ${esc(cd)}</span>
             </div>

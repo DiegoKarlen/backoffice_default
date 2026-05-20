@@ -2,9 +2,23 @@
 // @Loading Dependencies
 // ---------------------
 
-const
-  manifest = require('./manifest');
+const path = require('path');
+const manifest = require('./manifest');
 
+/**
+ * En desarrollo NO servir `src/*.html` como estáticos: si no, el navegador recibe el
+ * HTML sin los bundles inyectados por HtmlWebpackPlugin → pantalla en blanco (p. ej. admin-security).
+ * Las imágenes/fuentes bajo `src/assets/static` siguen disponibles en `/assets/static/...`.
+ */
+const staticConfig = manifest.IS_PRODUCTION
+  ? { directory: manifest.paths.build, watch: false }
+  : [
+      {
+        directory: path.join(manifest.paths.src, 'assets', 'static'),
+        publicPath: '/assets/static',
+        watch: true,
+      },
+    ];
 
 // ------------------
 // @DevServer Configs
@@ -15,10 +29,7 @@ const
  */
 
 const devServer = {
-  static: {
-    directory: manifest.IS_PRODUCTION ? manifest.paths.build : manifest.paths.src,
-    watch: true,
-  },
+  static: staticConfig,
   // MPA con varios .html: si está en true, algunos entornos sirven index.html en rutas y rompen fetch SPA.
   historyApiFallback: false,
   port: manifest.IS_PRODUCTION ? 3001 : 4000,

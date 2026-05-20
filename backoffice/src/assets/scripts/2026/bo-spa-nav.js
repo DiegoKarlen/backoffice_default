@@ -11,8 +11,10 @@ const SPA_FILES = new Set([
   "admin-users.html",
   "admin-roles.html",
   "admin-functionalities.html",
+  "admin-security.html",
   "admin-rooms.html",
   "admin-bingos.html",
+  "admin-players.html",
 ]);
 
 function fileFromUrl(u) {

@@ -3,6 +3,7 @@
  */
 import { api } from "./bo-api.js";
 import { t, applyDomI18n } from "./bo-i18n.js";
+import { attachBoPager, pagerAnchorFromTbody } from "./bo-pager.js";
 
 function esc(s) {
   const d = document.createElement("div");
@@ -85,22 +86,9 @@ function showBingosEditView() {
   if (edit) edit.hidden = false;
 }
 
-function renderPrizesEditor(host, prizes) {
-  if (!host) return;
-  const figureOptions = [
-    { v: "LINE", l: t("bingo.figureLine") },
-    { v: "PERIMETER", l: t("bingo.figurePerimeter") },
-    { v: "FULL_HOUSE", l: t("bingo.figureFullHouse") },
-  ];
-
-  let rows = prizes || [];
-  if (!rows.length) rows = [{ figure: "LINE", amount: "1" }];
-  host.innerHTML = `
-    <div class="field-help" style="margin-bottom:10px;">${esc(t("bingo.prizesHelp"))}</div>
-    <div data-bo-prize-list>
-      ${rows
-        .map(
-          (p) => `
+function buildPrizeRowHtml(p, figureOptions) {
+  const uniqueChecked = p.uniquePerRound !== false;
+  return `
         <div class="bo-bingo-prize-row" data-bo-prize-row>
           <div class="field field--underline">
             <label class="field-label" data-i18n="bingo.prizeFigure"></label>
@@ -117,10 +105,28 @@ function renderPrizesEditor(host, prizes) {
             <label class="field-label" data-i18n="bingo.prizeAmount"></label>
             <input class="input input--underline" type="text" inputmode="decimal" value="${esc(p.amount ?? "")}" data-bo-prize-amount>
           </div>
+          <label class="bo-bingo-prize-unique field-help">
+            <input type="checkbox" data-bo-prize-unique${uniqueChecked ? " checked" : ""} />
+            <span data-i18n="bingo.prizeUniquePerRound"></span>
+          </label>
           <button type="button" class="btn btn--ghost btn--sm" data-bo-prize-remove>${esc(t("bingo.prizeRemove"))}</button>
-        </div>`,
-        )
-        .join("")}
+        </div>`;
+}
+
+function renderPrizesEditor(host, prizes) {
+  if (!host) return;
+  const figureOptions = [
+    { v: "LINE", l: t("bingo.figureLine") },
+    { v: "PERIMETER", l: t("bingo.figurePerimeter") },
+    { v: "FULL_HOUSE", l: t("bingo.figureFullHouse") },
+  ];
+
+  let rows = prizes || [];
+  if (!rows.length) rows = [{ figure: "LINE", amount: "1", uniquePerRound: true }];
+  host.innerHTML = `
+    <div class="field-help" style="margin-bottom:10px;">${esc(t("bingo.prizesHelp"))}</div>
+    <div data-bo-prize-list>
+      ${rows.map((p) => buildPrizeRowHtml(p, figureOptions)).join("")}
     </div>
     <button type="button" class="btn btn--ghost btn--sm" data-bo-prize-add>${esc(t("bingo.prizeAdd"))}</button>
   `;
@@ -134,20 +140,7 @@ function renderPrizesEditor(host, prizes) {
     if (!list) return;
     list.insertAdjacentHTML(
       "beforeend",
-      `
-      <div class="bo-bingo-prize-row" data-bo-prize-row>
-        <div class="field field--underline">
-          <label class="field-label" data-i18n="bingo.prizeFigure"></label>
-          <select class="input input--underline" data-bo-prize-figure>
-            ${figureOptions.map((o) => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field field--underline">
-          <label class="field-label" data-i18n="bingo.prizeAmount"></label>
-          <input class="input input--underline" type="text" inputmode="decimal" value="1" data-bo-prize-amount>
-        </div>
-        <button type="button" class="btn btn--ghost btn--sm" data-bo-prize-remove>${esc(t("bingo.prizeRemove"))}</button>
-      </div>`,
+      buildPrizeRowHtml({ figure: "LINE", amount: "1", uniquePerRound: true }, figureOptions),
     );
     applyDomI18n(host);
     const newBtn = list.querySelector("[data-bo-prize-row]:last-child [data-bo-prize-remove]");
@@ -179,7 +172,9 @@ function collectPrizesFromHost(host) {
     const n = parseMoneyAmount(amt);
     if (!Number.isFinite(n) || n <= 0) throw new Error(t("bingo.errPrizeAmountInvalid"));
 
-    prizes.push({ figure: fig, amount: amt });
+    const uniqueEl = row.querySelector("[data-bo-prize-unique]");
+    const uniquePerRound = uniqueEl ? uniqueEl.checked : true;
+    prizes.push({ figure: fig, amount: amt, uniquePerRound });
   }
 
   if (prizes.length < 1) throw new Error(t("bingo.errPrizeMinOne"));
@@ -219,6 +214,9 @@ function collectPayload(prefix) {
     throw new Error(t("bingo.errMinPlayersRequired"));
   }
 
+  const defRadio = /** @type {HTMLInputElement | null} */ (document.getElementById(`${prefix}-prizePayoutMode-deferred`));
+  const prizePayoutMode = defRadio?.checked ? "DEFERRED_SPLIT_AT_ROUND_END" : "IMMEDIATE_FULL_PER_WINNER";
+
   const bingoType = document.getElementById(`${prefix}-bingoType`)?.value?.trim();
   if (!bingoType) throw new Error(t("bingo.errTypeRequired"));
 
@@ -236,6 +234,7 @@ function collectPayload(prefix) {
     repeatEveryMinutes,
     cardPrice,
     minPlayersToStart,
+    prizePayoutMode,
     prizes: collectPrizesFromHost(prizesHost),
   };
 }
@@ -252,6 +251,10 @@ function resetCreateForm() {
   document.getElementById("create-repeatEveryMinutes").value = "30";
   document.getElementById("create-cardPrice").value = "1";
   document.getElementById("create-minPlayersToStart").value = "2";
+  const createDef = /** @type {HTMLInputElement | null} */ (document.getElementById("create-prizePayoutMode-immediate"));
+  const createDefOff = /** @type {HTMLInputElement | null} */ (document.getElementById("create-prizePayoutMode-deferred"));
+  if (createDef) createDef.checked = true;
+  if (createDefOff) createDefOff.checked = false;
   document.getElementById("create-active").checked = false;
   renderPrizesEditor(document.getElementById("create-prizes"), []);
 }
@@ -273,10 +276,17 @@ function fillEditForm(bingo) {
     bingo.repeatEveryMinutes != null ? String(bingo.repeatEveryMinutes) : "30";
   document.getElementById("edit-cardPrice").value = String(bingo.cardPrice ?? "0");
   document.getElementById("edit-minPlayersToStart").value = String(bingo.minPlayersToStart ?? 2);
+  const imm = /** @type {HTMLInputElement | null} */ (document.getElementById("edit-prizePayoutMode-immediate"));
+  const def = /** @type {HTMLInputElement | null} */ (document.getElementById("edit-prizePayoutMode-deferred"));
+  const ppm = bingo.prizePayoutMode === "DEFERRED_SPLIT_AT_ROUND_END" ? "DEFERRED_SPLIT_AT_ROUND_END" : "IMMEDIATE_FULL_PER_WINNER";
+  if (imm && def) {
+    imm.checked = ppm === "IMMEDIATE_FULL_PER_WINNER";
+    def.checked = ppm === "DEFERRED_SPLIT_AT_ROUND_END";
+  }
   document.getElementById("edit-active").checked = bingo.status === "ACTIVE";
   renderPrizesEditor(
     document.getElementById("edit-prizes"),
-    (bingo.prizes || []).map((p) => ({ figure: p.figure, amount: p.amount })),
+    (bingo.prizes || []).map((p) => ({ figure: p.figure, amount: p.amount, uniquePerRound: p.uniquePerRound !== false })),
   );
 }
 
@@ -304,8 +314,22 @@ function roundStatusLabel(st) {
   return key ? t(key) : st;
 }
 
-/** Sin filtros de fecha/partida: últimas N partidas finalizadas (COMPLETED), más recientes primero. */
-const ROUNDS_DEFAULT_COMPLETED_LIMIT = 5;
+function cancellationReasonLabel(code) {
+  if (code == null || String(code).trim() === "") {
+    return "—";
+  }
+  const map = {
+    MIN_CARTONS_NOT_MET: "bingo.roundCancelMinCartons",
+    MANUAL_STOP: "bingo.roundCancelManualStop",
+    BINGO_INACTIVE: "bingo.roundCancelBingoInactive",
+    SCHEDULE_REMOVED: "bingo.roundCancelScheduleRemoved",
+  };
+  const key = map[code];
+  return key ? t(key) : String(code);
+}
+
+/** Sin filtros de fecha/partida: últimas N partidas terminadas (finalizadas o canceladas), más recientes primero. */
+const ROUNDS_DEFAULT_FINISHED_LIMIT = 500;
 
 function clearRoundsFilters() {
   const fromEl = document.getElementById("bo-rounds-filter-from");
@@ -327,8 +351,8 @@ function hasActiveRoundFilters() {
 function getRoundsFilterQuery() {
   if (!hasActiveRoundFilters()) {
     return {
-      status: "COMPLETED",
-      limit: String(ROUNDS_DEFAULT_COMPLETED_LIMIT),
+      finishedOnly: "true",
+      limit: String(ROUNDS_DEFAULT_FINISHED_LIMIT),
       sort: "desc",
     };
   }
@@ -344,40 +368,58 @@ function getRoundsFilterQuery() {
   return query;
 }
 
+/** @type {Array<Record<string, unknown>>} */
+let roundsListCache = [];
+/** @type {ReturnType<typeof attachBoPager> | null} */
+let roundsPager = null;
+
 function renderRoundsTableHtml(rounds) {
   if (!rounds.length) {
     return `<p class="bo-rounds-empty">${esc(t("bingo.roundsEmpty"))}</p>`;
   }
   return `
-    <div class="bo-rounds-table-wrap">
+    <div class="bo-rounds-table-wrap" id="bo-rounds-table-wrap">
       <table class="table">
         <thead>
           <tr>
             <th>${esc(t("bingo.roundsColSeq"))}</th>
             <th>${esc(t("bingo.roundsColStart"))}</th>
             <th>${esc(t("bingo.roundsColStatus"))}</th>
+            <th>${esc(t("bingo.roundsColReason"))}</th>
             <th>${esc(t("bingo.roundsColBalls"))}</th>
           </tr>
         </thead>
-        <tbody>
-          ${rounds
-            .map((r) => {
-              const tagClass = ROUND_STATUS_TAG[r.status] ?? "t-old";
-              const seq = r.sequence;
-              const partidaLabel =
-                seq != null && Number.isFinite(Number(seq)) ? String(Number(seq)) : "—";
-              return `
-              <tr>
-                <td class="mono bo-rounds-cell-partida">${esc(partidaLabel)}</td>
-                <td class="cell-date">${esc(new Date(r.startsAt).toLocaleString())}</td>
-                <td><span class="tag ${tagClass}">${esc(roundStatusLabel(r.status))}</span></td>
-                <td style="min-width:200px;">${renderRoundBallsCell(r)}</td>
-              </tr>`;
-            })
-            .join("")}
-        </tbody>
+        <tbody id="bo-rounds-tbody"></tbody>
       </table>
     </div>`;
+}
+
+/**
+ * @param {Record<string, unknown>} r
+ */
+function renderRoundRowHtml(r) {
+  const tagClass = ROUND_STATUS_TAG[/** @type {string} */ (r.status)] ?? "t-old";
+  const seq = r.sequence;
+  const partidaLabel = seq != null && Number.isFinite(Number(seq)) ? String(Number(seq)) : "—";
+  const reasonCell =
+    r.status === "CANCELLED"
+      ? `<span class="bo-rounds-reason">${esc(cancellationReasonLabel(/** @type {string | null | undefined} */ (r.cancellationReason)))}</span>`
+      : `<span class="bo-rounds-reason bo-rounds-reason--na">${esc("—")}</span>`;
+  return `
+              <tr>
+                <td class="mono bo-rounds-cell-partida">${esc(partidaLabel)}</td>
+                <td class="cell-date">${esc(new Date(/** @type {string} */ (r.startsAt)).toLocaleString())}</td>
+                <td><span class="tag ${tagClass}">${esc(roundStatusLabel(/** @type {string} */ (r.status)))}</span></td>
+                <td class="bo-rounds-cell-reason">${reasonCell}</td>
+                <td style="min-width:200px;">${renderRoundBallsCell(r)}</td>
+              </tr>`;
+}
+
+/**
+ * @param {Array<Record<string, unknown>>} rounds
+ */
+function renderRoundRowsHtml(rounds) {
+  return rounds.map((r) => renderRoundRowHtml(r)).join("");
 }
 
 function renderRoundBallsCell(r) {
@@ -392,6 +434,9 @@ function renderRoundBallsCell(r) {
   }
   if (r.status === "COMPLETED") {
     return `<span class="bo-rounds-empty">${esc(t("bingo.roundsNoBalls"))}</span>`;
+  }
+  if (r.status === "CANCELLED") {
+    return `<span class="bo-rounds-muted">${esc(t("bingo.roundsCancelledNoDraw"))}</span>`;
   }
   return "—";
 }
@@ -408,7 +453,24 @@ async function loadRoundsTable() {
   try {
     const data = await api.bingos.rounds(bingoId, getRoundsFilterQuery());
     const rounds = data.rounds || [];
+    roundsListCache = rounds;
     content.innerHTML = renderRoundsTableHtml(rounds);
+    if (!rounds.length) {
+      roundsPager = null;
+      return;
+    }
+    const anchor = document.getElementById("bo-rounds-table-wrap");
+    if (!anchor) return;
+    roundsPager = attachBoPager({
+      anchor,
+      getItems: () => roundsListCache,
+      renderPage: (slice) => {
+        const tb = document.getElementById("bo-rounds-tbody");
+        if (tb) tb.innerHTML = renderRoundRowsHtml(/** @type {typeof roundsListCache} */ (slice));
+      },
+      pageSize: 10,
+    });
+    roundsPager.refresh();
   } catch (e) {
     content.innerHTML = `<p class="field-help" style="color:var(--danger, #c0392b);">${esc(e.message)}</p>`;
     showToast(msg, e.message, true);
@@ -448,28 +510,26 @@ function wireBingoRoundsDialog() {
   });
 }
 
-async function renderBingosTable(tbody) {
-  const name = document.getElementById("bingo-filter-name")?.value?.trim();
-  const roomName = document.getElementById("bingo-filter-roomName")?.value?.trim();
-  const status = document.getElementById("bingo-filter-status")?.value;
-  const bingoType = document.getElementById("bingo-filter-type")?.value;
+/** @type {Array<Record<string, unknown>>} */
+let bingosListCache = [];
+/** @type {ReturnType<typeof attachBoPager> | null} */
+let bingosPager = null;
 
-  const { bingos } = await api.bingos.list({
-    name,
-    roomName: roomName || undefined,
-    status,
-    bingoType,
-  });
+/**
+ * @param {HTMLElement} tbody
+ * @param {Array<Record<string, unknown>>} bingos
+ */
+function paintBingosPage(tbody, bingos) {
   tbody.innerHTML = bingos
     .map(
       (b) => `
     <tr data-id="${esc(b.id)}">
       <td class="cell-name">${esc(b.name)}</td>
-      <td>${esc(b.room?.name ?? "—")}</td>
-      <td>${esc(typeLabel(b.bingoType))}</td>
+      <td>${esc(/** @type {{ name?: string }} */ (b.room)?.name ?? "—")}</td>
+      <td>${esc(typeLabel(/** @type {string} */ (b.bingoType)))}</td>
       <td>${b.status === "ACTIVE" ? `<span class="tag t-active">${esc(t("bingo.statusActive"))}</span>` : `<span class="tag t-old">${esc(t("bingo.statusInactive"))}</span>`}</td>
-      <td>${esc(new Date(b.startDateTime).toLocaleString())}</td>
-      <td>${b.endDateTime ? esc(new Date(b.endDateTime).toLocaleString()) : "—"}</td>
+      <td>${esc(new Date(/** @type {string} */ (b.startDateTime)).toLocaleString())}</td>
+      <td>${b.endDateTime ? esc(new Date(/** @type {string} */ (b.endDateTime)).toLocaleString()) : "—"}</td>
       <td>${b.repeatEveryMinutes != null ? esc(String(b.repeatEveryMinutes)) : "—"}</td>
       <td>${esc(b.cardPrice)}</td>
       <td>${esc(String(b.minPlayersToStart ?? "—"))}</td>
@@ -569,6 +629,32 @@ async function renderBingosTable(tbody) {
   });
 }
 
+async function renderBingosTable(tbody) {
+  const name = document.getElementById("bingo-filter-name")?.value?.trim();
+  const roomName = document.getElementById("bingo-filter-roomName")?.value?.trim();
+  const status = document.getElementById("bingo-filter-status")?.value;
+  const bingoType = document.getElementById("bingo-filter-type")?.value;
+
+  const { bingos } = await api.bingos.list({
+    name,
+    roomName: roomName || undefined,
+    status,
+    bingoType,
+  });
+  bingosListCache = bingos;
+  const anchor = pagerAnchorFromTbody(tbody);
+  if (!bingosPager && anchor) {
+    bingosPager = attachBoPager({
+      anchor,
+      getItems: () => bingosListCache,
+      renderPage: (slice) => paintBingosPage(tbody, /** @type {typeof bingosListCache} */ (slice)),
+    });
+  } else {
+    bingosPager?.reset();
+  }
+  bingosPager?.refresh();
+}
+
 async function fillRoomSelects() {
   const { rooms } = await api.rooms.list({});
   const opts = rooms
@@ -583,6 +669,10 @@ async function fillRoomSelects() {
 export async function initBingosPage() {
   const wrap = document.querySelector("[data-bo-bingos-wrap]");
   if (!wrap) return;
+
+  /** SPA: al cambiar de página el <main> es nuevo; el pager viejo seguía pintando un tbody desconectado. */
+  bingosPager = null;
+  roundsPager = null;
 
   applyDomI18n(wrap);
 

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Players · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="admin-players" data-bo-page="players">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content" data-bo-players-wrap>
+        <div id="bo-players-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+        <section class="col-12 card" id="bo-players-list-view">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="playersExtra.breadcrumb"></span>
+              <h2 class="card-title" data-i18n="playersExtra.listTitle"></h2>
+            </div>
+          </div>
+
+          <div class="bo-list-filters">
+            <form id="bo-players-filters-form" class="bo-bingo-filters bo-bingo-filters--list-align" action="#" method="get">
+              <div class="field field--underline">
+                <label class="field-label" for="players-filter-q" data-i18n="players.filterSearch"></label>
+                <input id="players-filter-q" class="input input--underline" type="search" autocomplete="off" name="q" data-i18n-placeholder="players.filterSearchPlaceholder">
+              </div>
+              <button type="submit" class="btn btn--ghost" id="bo-players-filter-apply" data-i18n="players.applyFilters"></button>
+            </form>
+          </div>
+
+          <div style="overflow:auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="players.colEmail"></th>
+                  <th data-i18n="players.colUsername"></th>
+                  <th data-i18n="players.colBalance"></th>
+                  <th data-i18n="players.colCurrency"></th>
+                  <th data-i18n="players.colStatus"></th>
+                  <th data-i18n="players.colCreated"></th>
+                  <th style="text-align:right;" data-i18n="players.colActions"></th>
+                </tr>
+              </thead>
+              <tbody id="bo-players-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="bo-player-credit-panel" hidden style="margin-bottom:18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="playersExtra.breadcrumb"></span>
+              <h2 class="card-title" data-i18n="playersExtra.creditTitle"></h2>
+            </div>
+          </div>
+          <p class="field-help" id="bo-player-credit-target" style="margin-bottom:12px;"></p>
+          <form id="bo-player-credit-form" class="bo-bingo-filters bo-bingo-filters--list-align" action="#" method="post">
+            <input type="hidden" id="bo-player-credit-id" value="" />
+            <div class="field field--underline">
+              <label class="field-label" for="bo-player-credit-amount" data-i18n="players.creditAmountCents"></label>
+              <input id="bo-player-credit-amount" class="input input--underline" type="number" min="1" step="1" required name="amountCents" />
+            </div>
+            <div class="field field--underline" style="grid-column:1/-1;">
+              <label class="field-label" for="bo-player-credit-note" data-i18n="players.creditNote"></label>
+              <textarea id="bo-player-credit-note" class="input input--underline" rows="2" name="note" data-i18n-placeholder="players.creditNotePlaceholder"></textarea>
+            </div>
+            <div class="bo-form-profile__actions" style="margin-top:12px;">
+              <button type="button" class="bo-form-profile__cancel" id="bo-player-credit-cancel" data-i18n="players.creditCancel"></button>
+              <button type="submit" class="btn btn--primary" id="bo-player-credit-submit" data-i18n="players.creditSubmit"></button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" id="bo-player-prize-panel" hidden style="margin-bottom:18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="playersExtra.breadcrumb"></span>
+              <h2 class="card-title" data-i18n="players.prizeCreditTitle"></h2>
+            </div>
+          </div>
+          <p class="field-help" id="bo-player-prize-target" style="margin-bottom:12px;"></p>
+          <p class="field-help" style="margin-bottom:12px;" data-i18n="players.prizeCreditHelp"></p>
+          <form id="bo-player-prize-form" class="bo-bingo-filters bo-bingo-filters--list-align" action="#" method="post">
+            <input type="hidden" id="bo-player-prize-player-id" value="" />
+            <div class="field field--underline">
+              <label class="field-label" for="bo-player-prize-bingo-prize-id" data-i18n="players.prizeCreditPrizeId"></label>
+              <input id="bo-player-prize-bingo-prize-id" class="input input--underline mono" type="text" autocomplete="off" placeholder="uuid" />
+            </div>
+            <div class="field field--underline">
+              <label class="field-label" for="bo-player-prize-card-id" data-i18n="players.prizeCreditCardId"></label>
+              <input id="bo-player-prize-card-id" class="input input--underline mono" type="text" autocomplete="off" placeholder="uuid" />
+            </div>
+            <div class="bo-form-profile__actions" style="margin-top:12px;">
+              <button type="button" class="bo-form-profile__cancel" id="bo-player-prize-cancel" data-i18n="players.creditCancel"></button>
+              <button type="submit" class="btn btn--primary" id="bo-player-prize-submit" data-i18n="players.prizeCreditSubmit"></button>
+            </div>
+          </form>
+        </section>
+
+        <dialog id="bo-wallet-card-dialog" class="bo-wallet-card-dialog">
+          <div class="bo-wallet-card-dialog__inner">
+            <div class="bo-wallet-card-dialog__head">
+              <h3 class="bo-wallet-card-dialog__title" id="bo-wallet-card-dialog-title"></h3>
+              <button type="button" class="btn btn--ghost btn--sm" id="bo-wallet-card-dialog-close" data-i18n="players.walletCardDetailClose"></button>
+            </div>
+            <div id="bo-wallet-card-dialog-body" class="bo-wallet-card-dialog__body"></div>
+          </div>
+        </dialog>
+        <input type="hidden" id="bo-player-wallet-player-id" value="" />
+
+        <section class="card" id="bo-player-activity-panel" hidden style="margin-bottom:18px;">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="playersExtra.breadcrumb"></span>
+              <h2 class="card-title" data-i18n="playersExtra.activityTitle"></h2>
+            </div>
+          </div>
+          <div id="bo-player-wallet-wrap" style="margin-bottom:16px;">
+            <form id="bo-player-wallet-filters-form" class="bo-bingo-filters bo-bingo-filters--list-align" action="#" method="get" style="margin-bottom:12px;">
+              <div class="field field--underline">
+                <label class="field-label" for="bo-wallet-filter-type" data-i18n="players.walletColType"></label>
+                <select id="bo-wallet-filter-type" class="input input--underline" name="type"></select>
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="bo-wallet-filter-room" data-i18n="players.walletColRoom"></label>
+                <input id="bo-wallet-filter-room" class="input input--underline" type="search" autocomplete="off" name="room" data-i18n-placeholder="players.walletFilterRoomPlaceholder">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="bo-wallet-filter-bingo" data-i18n="players.walletColBingo"></label>
+                <input id="bo-wallet-filter-bingo" class="input input--underline" type="search" autocomplete="off" name="bingo" data-i18n-placeholder="players.walletFilterBingoPlaceholder">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="bo-wallet-filter-round" data-i18n="players.walletColRound"></label>
+                <input id="bo-wallet-filter-round" class="input input--underline" type="search" autocomplete="off" name="round" data-i18n-placeholder="players.walletFilterRoundPlaceholder">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="bo-wallet-filter-from" data-i18n="players.walletFilterDateFrom"></label>
+                <input id="bo-wallet-filter-from" class="input input--underline" type="date" name="from">
+              </div>
+              <div class="field field--underline">
+                <label class="field-label" for="bo-wallet-filter-to" data-i18n="players.walletFilterDateTo"></label>
+                <input id="bo-wallet-filter-to" class="input input--underline" type="date" name="to">
+              </div>
+              <button type="submit" class="btn btn--ghost" id="bo-wallet-filter-apply" data-i18n="players.applyFilters"></button>
+            </form>
+            <div style="overflow:auto;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th data-i18n="players.walletColWhen"></th>
+                    <th data-i18n="players.walletColType"></th>
+                    <th data-i18n="players.walletColRoom"></th>
+                    <th data-i18n="players.walletColBingo"></th>
+                    <th data-i18n="players.walletColRound"></th>
+                    <th data-i18n="players.walletColAmount"></th>
+                    <th data-i18n="players.walletColBalanceAfter"></th>
+                    <th data-i18n="players.walletColDetail"></th>
+                  </tr>
+                </thead>
+                <tbody id="bo-player-wallet-tbody"></tbody>
+              </table>
+            </div>
+            <p id="bo-player-wallet-empty" class="field-help" hidden data-i18n="players.walletEmpty"></p>
+          </div>
+          <div style="margin-top:12px;">
+            <button type="button" class="btn btn--ghost" id="bo-player-activity-close" data-i18n="players.activityClose"></button>
+          </div>
+        </section>
+
+        <div data-shell-footer></div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

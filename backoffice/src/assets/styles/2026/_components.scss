@@ -29,6 +29,25 @@
 .hero-sub strong { color: var(--success); font-weight: 600; }
 .hero-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
+/* Home — room filter (upcoming bingos) */
+.bo-home-roombar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+}
+.bo-home-roombar__label {
+  margin: 0;
+  flex-shrink: 0;
+}
+.bo-home-roombar__select {
+  max-width: 360px;
+  min-width: 200px;
+  flex: 1;
+}
+
 /* Home — upcoming bingos */
 .bo-home-bingo { margin: 8px 0 26px; }
 .bo-home-bingo__grid {
@@ -367,6 +386,7 @@
 }
 .bo-bingo-prize-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
 .bo-bingo-prize-row .field { margin: 0; }
+.bo-bingo-prize-unique { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; white-space: nowrap; }
 
 /* Generic 12-column grid */
 .grid {
@@ -521,4 +541,190 @@
 .bo-rounds-empty {
   color: var(--t-muted);
   font-size: 13px;
+}
+.bo-rounds-cell-reason {
+  max-width: 280px;
+  font-size: 13px;
+  vertical-align: top;
+}
+.bo-rounds-reason {
+  color: var(--t-base);
+  line-height: 1.35;
+}
+.bo-rounds-reason--na {
+  color: var(--t-muted);
+}
+.bo-rounds-muted {
+  color: var(--t-muted);
+  font-size: 13px;
+}
+
+/* Player wallet ledger — BO jugadores */
+.wallet-amt--in {
+  color: var(--success, #22c55e);
+}
+.wallet-amt--out {
+  color: var(--danger, #ef4444);
+}
+
+.bo-wallet-detail-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.bo-wallet-detail-stack span {
+  font-size: 13px;
+}
+
+/* Wallet transaction — cartón BINGO 75 modal (grilla amplia, similar a la primera versión) */
+.bo-wallet-card-dialog {
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--bg-card);
+  color: var(--t-base);
+  max-width: min(920px, 98vw);
+  width: 100%;
+  box-shadow: var(--shadow-card);
+}
+.bo-wallet-card-dialog::backdrop {
+  background: color-mix(in oklab, var(--t-base) 35%, transparent);
+}
+.bo-wallet-card-dialog__inner {
+  padding: 24px 28px 28px;
+}
+.bo-wallet-card-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.bo-wallet-card-dialog__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.bo-wallet-card-dialog__body {
+  font-size: 15px;
+}
+.bo-wallet-card-dialog__body .field-help {
+  margin-bottom: 14px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.bo-wallet-card-dialog__figure-line {
+  margin-bottom: 18px;
+  font-size: 16px;
+}
+.bo-wallet-card-dialog__prize-layout {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(200px, 1fr);
+  gap: 22px 32px;
+  align-items: start;
+}
+@media (max-width: 560px) {
+  .bo-wallet-card-dialog__prize-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.bo-wallet-card-dialog__prize-col--card {
+  min-width: 0;
+}
+.bo-wallet-card-dialog__prize-col--drawn {
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-soft);
+}
+@media (max-width: 560px) {
+  .bo-wallet-card-dialog__prize-col--drawn {
+    padding-left: 0;
+    border-left: none;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+}
+.bo-wallet-card-dialog__drawn-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--t-muted);
+  margin-bottom: 10px;
+}
+.bo-wallet-card-dialog__drawn-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: none;
+  font-variant-numeric: tabular-nums;
+}
+.bo-wallet-card-pack {
+  margin-bottom: 20px;
+}
+.bo-wallet-card-pack:last-child {
+  margin-bottom: 0;
+}
+.bo-wallet-card-pack__label {
+  font-size: 12px;
+  color: var(--t-muted);
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bo-bingo-card-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 4rem);
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+}
+.bo-bingo-cell {
+  width: 4rem;
+  min-width: 0;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, monospace;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2, #f0f1f3);
+  color: var(--t-base);
+}
+.bo-bingo-cell--free {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.bo-bingo-cell--figure {
+  outline: 2px solid var(--primary, #0d9488);
+  outline-offset: -1px;
+  background: color-mix(in oklab, var(--primary, #0d9488) 18%, var(--surface-2, #f0f1f3));
+}
+:root[data-theme="dark"] .bo-bingo-cell--figure {
+  background: color-mix(in oklab, var(--primary, #0d9488) 22%, var(--surface-2, #1a1b1e));
+}
+
+@media (max-width: 420px) {
+  .bo-bingo-card-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+  .bo-bingo-cell {
+    width: auto;
+    min-height: 0;
+    font-size: 0.9rem;
+  }
+  .bo-bingo-cell--free {
+    font-size: 1.15rem;
+  }
 }

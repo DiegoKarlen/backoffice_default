@@ -2,6 +2,8 @@
 
 generator client {
   provider = "prisma-client-js"
+  /// Resolve `@prisma/client` from the API package (avoids stale client in `api/node_modules`).
+  output   = "../../api/node_modules/.prisma/client"
 }
 
 datasource db {
@@ -15,6 +17,10 @@ model User {
   passwordHash String
   displayName  String?
   active       Boolean    @default(true)
+  /// Base32 secret for TOTP (Google Authenticator / Microsoft Authenticator). Null = not configured.
+  totpSecret   String?
+  /// When true, login requires a valid TOTP after password (`totpSecret` must be set).
+  totpEnabled  Boolean    @default(false)
   roles        UserRole[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -24,26 +30,26 @@ model User {
 }
 
 model Role {
-  id              String                @id @default(uuid())
-  code            String                @unique
+  id              String              @id @default(uuid())
+  code            String              @unique
   name            String
   description     String?
   users           UserRole[]
   functionalities RoleFunctionality[]
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 }
 
 model Functionality {
-  id          String                @id @default(uuid())
-  code        String                @unique
+  id          String              @id @default(uuid())
+  code        String              @unique
   name        String
   description String?
   /// Grouping for menus or feature flags per product area.
   module      String?
   roles       RoleFunctionality[]
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 }
 
 model UserRole {
@@ -58,8 +64,8 @@ model UserRole {
 model RoleFunctionality {
   roleId          String
   functionalityId String
-  role            Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  functionality   Functionality   @relation(fields: [functionalityId], references: [id], onDelete: Cascade)
+  role            Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  functionality   Functionality @relation(fields: [functionalityId], references: [id], onDelete: Cascade)
 
   @@id([roleId, functionalityId])
 }
@@ -72,6 +78,14 @@ enum BingoType {
 enum BingoStatus {
   ACTIVE
   INACTIVE
+}
+
+/** Cómo se pagan los montos configurados por premio en bingo en vivo (75). */
+enum PrizePayoutMode {
+  /// Cada ganador cobra el monto completo al momento de ganar (comportamiento clásico).
+  IMMEDIATE_FULL_PER_WINNER
+  /// El monto del premio se reparte en partes iguales entre todos los ganadores de esa figura en la partida; acreditación al cerrar la ronda.
+  DEFERRED_SPLIT_AT_ROUND_END
 }
 
 // --- Bingo (simplified) ---
@@ -102,24 +116,25 @@ model Room {
 }
 
 model Bingo {
-  id                 String      @id @default(uuid())
+  id                 String       @id @default(uuid())
   roomId             String
-  room               Room        @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  room               Room         @relation(fields: [roomId], references: [id], onDelete: Restrict)
   name               String
-  status             BingoStatus @default(INACTIVE)
+  status             BingoStatus  @default(INACTIVE)
   bingoType          BingoType
   startDateTime      DateTime
   /// Último instante permitido para programar una partida (inicio). Null = sin límite.
   endDateTime        DateTime?
   repeatEveryMinutes Int?
-  cardPrice          Decimal     @db.Decimal(14, 4)
-  minPlayersToStart  Int         @default(2)
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  cardPrice          Decimal      @db.Decimal(14, 4)
+  minPlayersToStart  Int          @default(2)
+  prizePayoutMode    PrizePayoutMode @default(IMMEDIATE_FULL_PER_WINNER)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
   createdByUserId    String?
   updatedByUserId    String?
-  createdBy          User?       @relation("BingoCreatedBy", fields: [createdByUserId], references: [id])
-  updatedBy          User?       @relation("BingoUpdatedBy", fields: [updatedByUserId], references: [id])
+  createdBy          User?        @relation("BingoCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy          User?        @relation("BingoUpdatedBy", fields: [updatedByUserId], references: [id])
   prizes             BingoPrize[]
   rounds             BingoRound[]
 
@@ -138,16 +153,21 @@ enum BingoRoundStatus {
 
 /// Partida concreta (ocurrencia programada); materializada al guardar el bingo para poder asociar cartones antes del sorteo.
 model BingoRound {
-  id        String           @id @default(uuid())
-  bingoId   String
-  bingo     Bingo            @relation(fields: [bingoId], references: [id], onDelete: Cascade)
+  id               String            @id @default(uuid())
+  bingoId          String
+  bingo            Bingo             @relation(fields: [bingoId], references: [id], onDelete: Cascade)
   /// Número de partida dentro del bingo (UI “PARTIDA #N”).
-  sequence  Int
-  startsAt  DateTime
-  status    BingoRoundStatus @default(SCHEDULED)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  balls     BingoRoundBall[]
+  sequence         Int
+  startsAt         DateTime
+  status           BingoRoundStatus  @default(SCHEDULED)
+  /// Código estable cuando `status` = CANCELLED (ver `bingo-round-cancellation.ts`).
+  cancellationReason String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  balls            BingoRoundBall[]
+  cartonPurchases  CartonPurchase[]
+  playerRoundCards PlayerRoundCard[]
+  deferredPrizeWins DeferredRoundPrizeWin[]
 
   @@unique([bingoId, startsAt])
   @@index([bingoId, status])
@@ -166,14 +186,203 @@ model BingoRoundBall {
 }
 
 model BingoPrize {
-  id        String     @id @default(uuid())
-  bingoId   String
-  bingo     Bingo      @relation(fields: [bingoId], references: [id], onDelete: Cascade)
-  figure    BingoFigure
-  amount    Decimal    @db.Decimal(14, 4)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id              String        @id @default(uuid())
+  bingoId         String
+  bingo           Bingo         @relation(fields: [bingoId], references: [id], onDelete: Cascade)
+  figure          BingoFigure
+  amount          Decimal       @db.Decimal(14, 4)
+  /// Si true, como máximo un cartón gana este premio por partida; si false, cada cartón elegible cobra el monto completo.
+  uniquePerRound  Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  payouts         PrizePayout[]
+  deferredWins    DeferredRoundPrizeWin[]
 
   @@unique([bingoId, figure])
   @@index([bingoId])
+}
+
+// --- Players (public app): separate from backoffice User ---
+
+enum WalletTransactionType {
+  DEPOSIT
+  CARTON_PURCHASE
+  PRIZE_CREDIT
+  ADJUSTMENT
+  REFUND
+}
+
+enum DepositStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+/// Public-facing player account (register / wallet / purchases). Not linked to User (RBAC).
+model Player {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  username        String    @unique
+  passwordHash    String
+  active          Boolean   @default(true)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  wallet           Wallet?
+  deposits         Deposit[]
+  cartonPurchases  CartonPurchase[]
+  playerRoundCards PlayerRoundCard[]
+  prizePayouts     PrizePayout[]
+  deferredRoundPrizeWins DeferredRoundPrizeWin[]
+}
+
+/// One wallet per player; balances in integer cents (single currency code for now).
+model Wallet {
+  id           String   @id @default(uuid())
+  playerId     String   @unique
+  player       Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  balanceCents Int      @default(0)
+  currencyCode String   @default("ARS")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions WalletTransaction[]
+}
+
+/// Ledger line: amountCents negative = debit, positive = credit. Exactly one source FK should be set (by type).
+model WalletTransaction {
+  id                String                @id @default(uuid())
+  walletId          String
+  wallet            Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type              WalletTransactionType
+  amountCents       Int
+  balanceAfterCents Int?
+  createdAt         DateTime              @default(now())
+
+  depositId String?  @unique
+  deposit   Deposit? @relation(fields: [depositId], references: [id], onDelete: Restrict)
+
+  cartonPurchaseId String?         @unique
+  cartonPurchase   CartonPurchase? @relation(fields: [cartonPurchaseId], references: [id], onDelete: Restrict)
+
+  /// Crédito por cancelación de partida (reembolso de la compra asociada).
+  refundForCartonPurchaseId String? @unique
+  refundForCartonPurchase   CartonPurchase? @relation("CartonPurchaseRefund", fields: [refundForCartonPurchaseId], references: [id], onDelete: Restrict)
+
+  prizePayoutId String?      @unique
+  prizePayout   PrizePayout? @relation(fields: [prizePayoutId], references: [id], onDelete: Restrict)
+
+  @@index([walletId, createdAt])
+  @@index([type])
+}
+
+model Deposit {
+  id           String        @id @default(uuid())
+  playerId     String
+  player       Player        @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  amountCents  Int
+  currencyCode String        @default("ARS")
+  status       DepositStatus @default(PENDING)
+  externalRef  String?
+  createdAt    DateTime      @default(now())
+  completedAt  DateTime?
+
+  walletTransaction WalletTransaction?
+
+  @@index([playerId, createdAt])
+}
+
+/// Purchase of one or more cartons for a round; pricing snapshot at purchase time.
+model CartonPurchase {
+  id             String     @id @default(uuid())
+  playerId       String
+  player         Player     @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  bingoRoundId   String
+  bingoRound     BingoRound @relation(fields: [bingoRoundId], references: [id], onDelete: Restrict)
+  quantity       Int
+  unitPriceCents Int
+  totalCents     Int
+  createdAt      DateTime   @default(now())
+
+  playerRoundCards  PlayerRoundCard[]
+  walletTransaction     WalletTransaction?
+  refundWalletTransaction WalletTransaction? @relation("CartonPurchaseRefund")
+
+  @@index([playerId, createdAt])
+  @@index([bingoRoundId])
+}
+
+/// One emitted carton for a round; cardFingerprint prevents duplicate grids within the same round.
+model PlayerRoundCard {
+  id               String         @id @default(uuid())
+  playerId         String
+  player           Player         @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  bingoRoundId     String
+  bingoRound       BingoRound     @relation(fields: [bingoRoundId], references: [id], onDelete: Restrict)
+  cartonPurchaseId String
+  cartonPurchase   CartonPurchase @relation(fields: [cartonPurchaseId], references: [id], onDelete: Restrict)
+  cardIndex        Int
+  /// Stable hash of grid contents for uniqueness within bingoRoundId (e.g. SHA-256 hex).
+  cardFingerprint  String         @db.VarChar(64)
+  createdAt        DateTime       @default(now())
+
+  cells        BingoCardCell[]
+  prizePayouts PrizePayout[]
+  deferredRoundPrizeWins DeferredRoundPrizeWin[]
+
+  @@unique([bingoRoundId, cardFingerprint])
+  @@index([playerId])
+  @@index([cartonPurchaseId])
+}
+
+/// Normalized grid cell for a player card (BINGO_75 / BINGO_90 layout rules enforced in app).
+model BingoCardCell {
+  id                String          @id @default(uuid())
+  playerRoundCardId String
+  playerRoundCard   PlayerRoundCard @relation(fields: [playerRoundCardId], references: [id], onDelete: Cascade)
+  row               Int
+  col               Int
+  number            Int?
+  isFree            Boolean         @default(false)
+
+  @@unique([playerRoundCardId, row, col])
+  @@index([playerRoundCardId])
+}
+
+/// Ganador elegible durante la partida si `Bingo.prizePayoutMode` = DEFERRED_SPLIT_AT_ROUND_END — la wallet se acredita al cerrar la ronda.
+model DeferredRoundPrizeWin {
+  id                String         @id @default(uuid())
+  bingoRoundId      String
+  bingoRound        BingoRound     @relation(fields: [bingoRoundId], references: [id], onDelete: Cascade)
+  bingoPrizeId      String
+  bingoPrize        BingoPrize     @relation(fields: [bingoPrizeId], references: [id], onDelete: Cascade)
+  playerId          String
+  player            Player         @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  playerRoundCardId String
+  playerRoundCard   PlayerRoundCard @relation(fields: [playerRoundCardId], references: [id], onDelete: Restrict)
+  createdAt         DateTime       @default(now())
+
+  @@unique([bingoRoundId, bingoPrizeId, playerRoundCardId])
+  @@index([bingoRoundId])
+}
+
+/// Prize credited to the player; winning card + configured prize row.
+model PrizePayout {
+  id                String          @id @default(uuid())
+  playerId          String
+  player            Player          @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  bingoPrizeId      String
+  bingoPrize        BingoPrize      @relation(fields: [bingoPrizeId], references: [id], onDelete: Restrict)
+  playerRoundCardId String
+  playerRoundCard   PlayerRoundCard @relation(fields: [playerRoundCardId], references: [id], onDelete: Restrict)
+  amountCents       Int
+  createdAt         DateTime        @default(now())
+
+  walletTransaction WalletTransaction?
+
+  @@index([playerId, createdAt])
+  @@index([bingoPrizeId])
+  @@index([playerRoundCardId])
 }

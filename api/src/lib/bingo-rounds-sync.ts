@@ -1,4 +1,5 @@
 import { BingoRoundStatus, BingoStatus } from "@prisma/client";
+import { BingoRoundCancelReason } from "./bingo-round-cancellation.js";
 import { prisma } from "./prisma.js";
 import { upcomingRunsForBingo } from "./bingo-upcoming.js";
 
@@ -32,7 +33,10 @@ export async function syncScheduledRoundsForBingo(bingoId: string): Promise<void
         status: BingoRoundStatus.SCHEDULED,
         startsAt: { gte: now },
       },
-      data: { status: BingoRoundStatus.CANCELLED },
+      data: {
+        status: BingoRoundStatus.CANCELLED,
+        cancellationReason: BingoRoundCancelReason.BINGO_INACTIVE,
+      },
     });
     return;
   }
@@ -67,20 +71,27 @@ export async function syncScheduledRoundsForBingo(bingoId: string): Promise<void
     if (!targetMs.has(r.startsAt.getTime())) {
       await prisma.bingoRound.update({
         where: { id: r.id },
-        data: { status: BingoRoundStatus.CANCELLED },
+        data: {
+          status: BingoRoundStatus.CANCELLED,
+          cancellationReason: BingoRoundCancelReason.SCHEDULE_REMOVED,
+        },
       });
     }
   }
 
   if (targetMsList.length === 0) return;
 
+  // Prisma/PG prepared statements have a max bind vars limit; chunk the IN list.
   const datesForQuery = targetMsList.map((ms) => new Date(ms));
-  const existingForTargets = await prisma.bingoRound.findMany({
-    where: {
-      bingoId,
-      startsAt: { in: datesForQuery },
-    },
-  });
+  const existingForTargets: typeof futureScheduled = [];
+  const CHUNK = 5000;
+  for (let i = 0; i < datesForQuery.length; i += CHUNK) {
+    const chunk = datesForQuery.slice(i, i + CHUNK);
+    const rows = await prisma.bingoRound.findMany({
+      where: { bingoId, startsAt: { in: chunk } },
+    });
+    existingForTargets.push(...rows);
+  }
   const byMs = new Map(existingForTargets.map((x) => [x.startsAt.getTime(), x]));
 
   const maxSeqAgg = await prisma.bingoRound.aggregate({
@@ -95,7 +106,7 @@ export async function syncScheduledRoundsForBingo(bingoId: string): Promise<void
       if (ex.status === BingoRoundStatus.CANCELLED) {
         await prisma.bingoRound.update({
           where: { id: ex.id },
-          data: { status: BingoRoundStatus.SCHEDULED },
+          data: { status: BingoRoundStatus.SCHEDULED, cancellationReason: null },
         });
       }
       continue;

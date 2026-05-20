@@ -137,6 +137,22 @@
                 <label class="field-label" for="create-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
                 <input id="create-minPlayersToStart" class="input input--underline" type="number" min="1" max="100000" value="2" required>
               </div>
+              <div class="field bo-form-profile__full">
+                <span class="field-label" data-i18n="bingo.labelPrizePayoutMode"></span>
+                <p class="field-help" style="margin-bottom:8px;" data-i18n="bingo.helpPrizePayoutMode"></p>
+                <div class="field-group bo-radio-stack">
+                  <label class="check">
+                    <input type="radio" name="create-prizePayoutMode" id="create-prizePayoutMode-immediate" value="IMMEDIATE_FULL_PER_WINNER" checked>
+                    <span class="box"></span>
+                    <span data-i18n="bingo.prizePayoutImmediate"></span>
+                  </label>
+                  <label class="check">
+                    <input type="radio" name="create-prizePayoutMode" id="create-prizePayoutMode-deferred" value="DEFERRED_SPLIT_AT_ROUND_END">
+                    <span class="box"></span>
+                    <span data-i18n="bingo.prizePayoutDeferred"></span>
+                  </label>
+                </div>
+              </div>
               <div class="field field--check-cell">
                 <label class="check">
                   <input id="create-active" type="checkbox">
@@ -203,6 +219,22 @@
               <div class="field field--underline">
                 <label class="field-label" for="edit-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
                 <input id="edit-minPlayersToStart" class="input input--underline" type="number" min="1" required>
+              </div>
+              <div class="field bo-form-profile__full">
+                <span class="field-label" data-i18n="bingo.labelPrizePayoutMode"></span>
+                <p class="field-help" style="margin-bottom:8px;" data-i18n="bingo.helpPrizePayoutMode"></p>
+                <div class="field-group bo-radio-stack">
+                  <label class="check">
+                    <input type="radio" name="edit-prizePayoutMode" id="edit-prizePayoutMode-immediate" value="IMMEDIATE_FULL_PER_WINNER" checked>
+                    <span class="box"></span>
+                    <span data-i18n="bingo.prizePayoutImmediate"></span>
+                  </label>
+                  <label class="check">
+                    <input type="radio" name="edit-prizePayoutMode" id="edit-prizePayoutMode-deferred" value="DEFERRED_SPLIT_AT_ROUND_END">
+                    <span class="box"></span>
+                    <span data-i18n="bingo.prizePayoutDeferred"></span>
+                  </label>
+                </div>
               </div>
               <div class="field field--check-cell">
                 <label class="check">

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Security · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="admin-security" data-bo-page="security">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content" data-bo-security-wrap>
+          <div id="bo-security-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+          <section class="hero hero--compact">
+            <h1 class="hero-title" data-i18n="security.pageTitle"></h1>
+            <p class="hero-sub muted" data-i18n="security.pageSub"></p>
+          </section>
+
+          <section class="col-12 card" id="bo-security-panel">
+            <p class="sub" data-i18n="security.authenticatorHint"></p>
+            <div id="bo-security-status" class="field-help" style="margin:12px 0;"></div>
+
+            <div id="bo-security-active" hidden style="margin-top:16px;">
+              <p data-i18n="security.enabledLine"></p>
+              <form id="bo-security-disable-form" class="bo-form-profile" style="max-width:420px;margin-top:12px;">
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-disable-password" data-i18n="security.disablePassword"></label>
+                  <input id="bo-disable-password" class="input input--underline" type="password" autocomplete="current-password" required>
+                </div>
+                <div class="bo-form-profile__actions">
+                  <button type="button" class="bo-form-profile__cancel" id="bo-security-disable-cancel" data-i18n="users.cancel"></button>
+                  <button type="submit" class="btn btn--primary" data-i18n="security.btnDisable"></button>
+                </div>
+              </form>
+            </div>
+
+            <div id="bo-security-setup" hidden style="margin-top:16px;">
+              <p data-i18n="security.setupScan"></p>
+              <div style="margin:12px 0;">
+                <img id="bo-security-qr" alt="" width="200" height="200" style="border-radius:8px;background:#fff;padding:8px;" hidden />
+              </div>
+              <p><span data-i18n="security.manualSecret"></span> <code id="bo-security-secret" class="mono" style="word-break:break-all;"></code></p>
+              <p class="field-help" data-i18n="security.setupThenCode"></p>
+              <form id="bo-security-enable-form" class="bo-form-profile" style="max-width:320px;">
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-enable-code" data-i18n="security.codeLabel"></label>
+                  <input id="bo-enable-code" class="input input--underline" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" required>
+                </div>
+                <div class="bo-form-profile__actions">
+                  <button type="button" class="bo-form-profile__cancel" id="bo-security-enable-cancel" data-i18n="users.cancel"></button>
+                  <button type="submit" class="btn btn--primary" data-i18n="security.btnConfirm"></button>
+                </div>
+              </form>
+            </div>
+
+            <div id="bo-security-idle" class="bo-security-idle-cta">
+              <button type="button" class="btn btn--primary" id="bo-security-btn-start" data-i18n="security.btnStart"></button>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

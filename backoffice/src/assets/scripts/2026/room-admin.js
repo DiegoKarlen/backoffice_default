@@ -3,6 +3,7 @@
  */
 import { api } from "./bo-api.js";
 import { t, applyDomI18n } from "./bo-i18n.js";
+import { attachBoPager, pagerAnchorFromTbody } from "./bo-pager.js";
 
 function esc(s) {
   const d = document.createElement("div");
@@ -40,15 +41,16 @@ function showRoomsEditView() {
   document.getElementById("bo-room-edit-panel").hidden = false;
 }
 
-async function renderRoomsTable(tbody) {
-  const name = document.getElementById("room-filter-name")?.value?.trim();
-  const status = document.getElementById("room-filter-status")?.value;
+/** @type {Array<Record<string, unknown>>} */
+let roomsListCache = [];
+/** @type {ReturnType<typeof attachBoPager> | null} */
+let roomsPager = null;
 
-  const q = {};
-  if (name) q.name = name;
-  if (status) q.status = status;
-
-  const { rooms } = await api.rooms.list(q);
+/**
+ * @param {HTMLElement} tbody
+ * @param {Array<Record<string, unknown>>} rooms
+ */
+function paintRoomsPage(tbody, rooms) {
   tbody.innerHTML = rooms
     .map(
       (s) => `
@@ -58,7 +60,7 @@ async function renderRoomsTable(tbody) {
         <a href="${esc(s.displayUrl)}" target="_blank" rel="noopener noreferrer" title="${esc(s.displayUrl)}">${esc(s.displayUrl)}</a>
       </td>
       <td>${s.status === "ACTIVE" ? `<span class="tag t-active">${esc(t("room.statusActive"))}</span>` : `<span class="tag t-old">${esc(t("room.statusInactive"))}</span>`}</td>
-      <td>${esc(new Date(s.createdAt).toLocaleString())}</td>
+      <td>${esc(new Date(/** @type {string} */ (s.createdAt)).toLocaleString())}</td>
       <td style="text-align:right;white-space:nowrap;">
         <button type="button" class="btn btn--ghost btn--sm bo-edit-room">${esc(t("room.edit"))}</button>
         ${
@@ -140,9 +142,35 @@ async function renderRoomsTable(tbody) {
   });
 }
 
+async function renderRoomsTable(tbody) {
+  const name = document.getElementById("room-filter-name")?.value?.trim();
+  const status = document.getElementById("room-filter-status")?.value;
+
+  const q = {};
+  if (name) q.name = name;
+  if (status) q.status = status;
+
+  const { rooms } = await api.rooms.list(q);
+  roomsListCache = rooms;
+  const anchor = pagerAnchorFromTbody(tbody);
+  if (!roomsPager && anchor) {
+    roomsPager = attachBoPager({
+      anchor,
+      getItems: () => roomsListCache,
+      renderPage: (slice) => paintRoomsPage(tbody, /** @type {typeof roomsListCache} */ (slice)),
+    });
+  } else {
+    roomsPager?.reset();
+  }
+  roomsPager?.refresh();
+}
+
 export async function initRoomsPage() {
   const wrap = document.querySelector("[data-bo-rooms-wrap]");
   if (!wrap) return;
+
+  /** SPA: mismo problema que bingos — pager reutilizado apuntaba a tbody fuera del DOM. */
+  roomsPager = null;
 
   const tbody = document.getElementById("bo-room-tbody");
   const msg = document.getElementById("bo-rooms-msg");
