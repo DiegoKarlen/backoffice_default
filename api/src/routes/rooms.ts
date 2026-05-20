@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { RoomStatus } from "@prisma/client";
-import { ensureLiveSessionForRoom } from "../bingo-game/live-session.js";
+import { ensureLiveSessionForRoom } from "../game-engine/bingo/live-session.js";
 import { prisma } from "../lib/prisma.js";
 import { type AuthedRequest, requireAuth } from "../middleware/auth.js";
 

@@ -852,9 +852,19 @@ body {
   min-width: 0;
 }
 
-.bd-up-card__partida {
+.bd-up-card__bingo {
   font-weight: 900;
-  font-size: 17px;
+  font-size: 18px;
+  color: #ffe9a8;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bd-up-card__partida {
+  font-weight: 800;
+  font-size: 14px;
   color: #d8b4fe;
   letter-spacing: 0.02em;
 }
@@ -1115,7 +1125,16 @@ body {
   color: rgba(160, 168, 196, 0.9);
 }
 
-.bd-idle__room {
+.bd-idle__sala {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(160, 168, 196, 0.92);
+  text-transform: uppercase;
+}
+
+.bd-idle__bingo {
   margin: 0;
   font-size: 44px;
   font-weight: 800;
@@ -1343,4 +1362,111 @@ body {
 
 .sd-err {
   color: #fb7185;
+}
+
+/* Aviso de premio (SSE prize_awarded) — centrado abajo del lienzo */
+.bd-prize-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%) translateY(16px);
+  z-index: 62;
+  max-width: min(920px, 92%);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.35s ease,
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.bd-prize-toast.bd-prize-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.bd-prize-toast__panel {
+  padding: 18px 28px 20px;
+  border-radius: 14px;
+  text-align: center;
+  background: linear-gradient(165deg, rgba(18, 12, 36, 0.96), rgba(8, 6, 18, 0.94));
+  border: 1px solid rgba(240, 216, 117, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 42px rgba(168, 85, 247, 0.22);
+}
+
+.bd-prize-toast__badge {
+  display: block;
+  font-family: var(--bd-display);
+  font-size: clamp(22px, 2.6vw, 34px);
+  letter-spacing: 0.14em;
+  color: var(--bd-gold);
+  text-shadow: 0 0 20px rgba(240, 216, 117, 0.35);
+  margin-bottom: 8px;
+}
+
+.bd-prize-toast__paying {
+  margin: 0 0 12px;
+  font-size: clamp(15px, 1.75vw, 20px);
+  font-weight: 600;
+  color: rgba(255, 250, 235, 0.92);
+  letter-spacing: 0.02em;
+}
+
+.bd-prize-toast__paying--pulse {
+  animation: bd-prize-paying-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes bd-prize-paying-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 18px rgba(52, 211, 153, 0.45);
+  }
+}
+
+.bd-prize-toast__line {
+  margin: 0 0 6px;
+  font-size: clamp(17px, 2vw, 24px);
+  font-weight: 700;
+  color: var(--bd-text);
+  line-height: 1.35;
+}
+
+.bd-prize-toast__sep {
+  margin: 0 0.35em;
+  color: var(--bd-quiet);
+  font-weight: 500;
+}
+
+.bd-prize-toast__winner {
+  color: rgba(255, 250, 235, 0.98);
+}
+
+.bd-prize-toast__amount {
+  margin: 0;
+  font-size: clamp(20px, 2.4vw, 30px);
+  font-weight: 800;
+  color: var(--bd-gold);
+  letter-spacing: 0.04em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bd-prize-toast {
+    transition-duration: 0.05s;
+    transform: translateX(-50%);
+  }
+
+  .bd-prize-toast.bd-prize-toast--visible {
+    transform: translateX(-50%);
+  }
+
+  .bd-prize-toast__paying--pulse {
+    animation: none;
+    opacity: 1;
+  }
 }

@@ -175,6 +175,14 @@
   padding: 11px 22px;
 }
 
+/* Primary CTA aligned with form footers (no fields above) */
+.bo-security-idle-cta {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 720px;
+  margin-top: 16px;
+}
+
 .bo-role-picker {
   display: flex;
   flex-direction: column;

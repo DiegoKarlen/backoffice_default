@@ -1,6 +1,8 @@
 # RNG del bingo — notas para revisión tipo GLI / laboratorio
 
-Este documento describe el diseño del generador aleatorio usado en `api/src/bingo-game/`. **No sustituye** un informe de certificación: GLI (u otro laboratorio) certifica **producto + proceso + build**, no solo el código fuente.
+Este documento describe el diseño del generador aleatorio usado en `api/src/game-engine/rng/`. **No sustituye** un informe de certificación: GLI (u otro laboratorio) certifica **producto + proceso + build**, no solo el código fuente.
+
+Para la arquitectura de motores (bingo 75/90, futuras familias slots/crash), ver [game-engine.md](./game-engine.md).
 
 ## Qué está implementado
 
@@ -9,7 +11,7 @@ Este documento describe el diseño del generador aleatorio usado en `api/src/bin
 | Fuente | Node.js `crypto.randomInt` (`node:crypto`) — CSPRNG del sistema |
 | Enteros uniformes | Rango inclusivo vía API nativa de Node |
 | Barajado de bolas | Fisher–Yates in-place (`rng.shuffleInPlace`) |
-| Aislamiento | Sorteos de juego concentrados en `bingo-game/rng.ts` |
+| Aislamiento | Sorteos de juego concentrados en `game-engine/rng/index.ts` |
 | Trazabilidad opcional | Variables `BINGO_RNG_AUDIT_LOG`, `BINGO_RNG_AUDIT_VERBOSE` |
 
 ## Variables de entorno (API)
@@ -27,4 +29,4 @@ Este documento describe el diseño del generador aleatorio usado en `api/src/bin
 
 ## Identificación de implementación
 
-Constantes exportadas en `rng.ts`: `RNG_IMPLEMENTATION_ID`, `RNG_IMPLEMENTATION_VERSION`, `RNG_CRYPTO_SOURCE` — pueden citarse en informes de build.
+Constantes exportadas en `game-engine/rng/index.ts`: `RNG_IMPLEMENTATION_ID`, `RNG_IMPLEMENTATION_VERSION`, `RNG_CRYPTO_SOURCE` — pueden citarse en informes de build.

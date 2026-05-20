@@ -52,6 +52,7 @@
 
           <div id="bo-signin-error" class="field-help" style="display:none;margin-bottom:12px;color:var(--danger,#c0392b);"></div>
 
+          <div id="bo-step-password">
           <form class="auth-form" id="bo-signin-form">
             <div class="field">
               <label class="field-label" for="email" data-i18n="signin.email"></label>
@@ -83,6 +84,22 @@
               <svg viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </button>
           </form>
+          </div>
+
+          <div id="bo-step-totp" hidden>
+            <p class="sub" data-i18n="signin.totpIntro"></p>
+            <p id="bo-totp-email" class="field-help" style="margin-bottom:12px;"></p>
+            <div class="field">
+              <label class="field-label" for="bo-totp-code" data-i18n="signin.totpCodeLabel"></label>
+              <input id="bo-totp-code" class="input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code">
+            </div>
+            <button type="button" class="btn btn--primary auth-submit" id="bo-totp-continue" style="margin-top:8px;">
+              <span data-i18n="signin.totpContinue"></span>
+            </button>
+            <button type="button" class="btn btn--ghost" id="bo-totp-back" style="margin-top:12px;">
+              <span data-i18n="signin.totpBack"></span>
+            </button>
+          </div>
         </div>
 
         <div class="auth-main-bottom"></div>

@@ -17,6 +17,8 @@ export type UpcomingOccurrence = {
   prizes: UpcomingPrize[];
   /** `BingoRound.sequence` cuando la partida ya está materializada */
   roundSequence: number | null;
+  /** Id de fila `BingoRound` cuando existe; necesario para comprar cartones vía API jugador. */
+  bingoRoundId: string | null;
 };
 
 export type UpcomingPayload = {
@@ -165,7 +167,7 @@ export async function buildUpcomingPayload(
     include: { prizes: { orderBy: { figure: "asc" } }, room: true },
   });
 
-  type OccurrenceDraft = Omit<UpcomingOccurrence, "roundSequence">;
+  type OccurrenceDraft = Omit<UpcomingOccurrence, "roundSequence" | "bingoRoundId">;
   const occurrences: OccurrenceDraft[] = [];
 
   for (const b of rows) {
@@ -204,22 +206,32 @@ export async function buildUpcomingPayload(
 
   let trimmed: UpcomingOccurrence[] = [];
   if (trimmedRaw.length > 0) {
+    const pairSeen = new Set<string>();
+    const orPairs: Array<{ bingoId: string; startsAt: Date }> = [];
+    for (const o of trimmedRaw) {
+      const k = `${o.bingoId}:${o.startsAtMs}`;
+      if (pairSeen.has(k)) continue;
+      pairSeen.add(k);
+      orPairs.push({ bingoId: o.bingoId, startsAt: new Date(o.startsAtMs) });
+    }
     const rounds = await prisma.bingoRound.findMany({
-      where: {
-        OR: trimmedRaw.map((o) => ({
-          bingoId: o.bingoId,
-          startsAt: new Date(o.startsAtMs),
-        })),
-      },
-      select: { bingoId: true, startsAt: true, sequence: true },
+      where: { OR: orPairs },
+      select: { id: true, bingoId: true, startsAt: true, sequence: true },
     });
-    const seqMap = new Map(
-      rounds.map((r) => [`${r.bingoId}:${r.startsAt.getTime()}`, r.sequence] as const),
+    const roundMeta = new Map(
+      rounds.map(
+        (r) =>
+          [`${r.bingoId}:${r.startsAt.getTime()}`, { sequence: r.sequence, id: r.id }] as const,
+      ),
     );
-    trimmed = trimmedRaw.map((o) => ({
-      ...o,
-      roundSequence: seqMap.get(`${o.bingoId}:${o.startsAtMs}`) ?? null,
-    }));
+    trimmed = trimmedRaw.map((o) => {
+      const meta = roundMeta.get(`${o.bingoId}:${o.startsAtMs}`);
+      return {
+        ...o,
+        roundSequence: meta?.sequence ?? null,
+        bingoRoundId: meta?.id ?? null,
+      };
+    });
   }
 
   /** Solo citas estrictamente futuras: evita que la ranura que acaba de empezar quede primera en la lista. */

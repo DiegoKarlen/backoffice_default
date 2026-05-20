@@ -23,6 +23,8 @@ const titles = {
   'admin-roles': 'Backoffice · Roles',
   'admin-functionalities': 'Backoffice · Functionalities',
   'admin-bingos': 'Backoffice · Bingos',
+  'admin-players': 'Backoffice · Players',
+  'admin-security': 'Backoffice · Security',
   'admin-rooms': 'Backoffice · Rooms',
   'signup': 'Adminator · Sign Up',
   '404': 'Adminator · 404',

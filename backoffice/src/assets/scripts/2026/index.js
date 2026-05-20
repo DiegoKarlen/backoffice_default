@@ -44,22 +44,27 @@ function start() {
   const reduceMotion =
     typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  if (hasShellHosts && !reduceMotion) {
+  const useShellEnter = hasShellHosts && !reduceMotion;
+  if (useShellEnter) {
     document.documentElement.classList.add("bo-use-page-enter");
   }
 
-  mountShell();
-  initI18nUi();
-  initLanguageSelector();
-  initShellBehaviors();
-  initAdminPages();
-  initBoSpaNav();
+  try {
+    mountShell();
+    initI18nUi();
+    initLanguageSelector();
+    initShellBehaviors();
+    initAdminPages();
+    initBoSpaNav();
+  } catch (err) {
+    console.error(err);
+  }
 
-  if (!hasShellHosts || reduceMotion) {
+  if (!useShellEnter) {
     markShellTransitionReady();
   } else {
     requestAnimationFrame(() => {
-      requestAnimationFrame(markShellTransitionReady);
+      requestAnimationFrame(() => markShellTransitionReady());
     });
   }
 }

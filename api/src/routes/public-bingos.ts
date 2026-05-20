@@ -4,7 +4,7 @@ import {
   ensureLiveSessionForRoom,
   registerLiveSession,
   getLiveSession,
-} from "../bingo-game/live-session.js";
+} from "../game-engine/bingo/live-session.js";
 import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
 import { prisma } from "../lib/prisma.js";
 

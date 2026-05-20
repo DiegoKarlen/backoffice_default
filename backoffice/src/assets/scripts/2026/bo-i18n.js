@@ -107,6 +107,8 @@ export function titleForPage(page) {
     functionalities: "titles.functionalities",
     bingos: "titles.bingos",
     rooms: "titles.rooms",
+    players: "titles.players",
+    security: "titles.security",
   };
   const key = map[page] || "titles.home";
   return t(key);
@@ -125,6 +127,8 @@ export function crumbsStringForPage(page) {
     functionalities: "functionalities",
     bingos: "bingos",
     rooms: "rooms",
+    players: "players",
+    security: "security",
   };
   const suffix = map[page] || "home";
   return t(`crumbs.${suffix}`);

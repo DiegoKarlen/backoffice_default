@@ -106,10 +106,16 @@ usersRouter.patch("/:id", async (req: AuthedRequest, res) => {
     displayName?: string | null;
     active?: boolean;
     passwordHash?: string;
+    totpSecret?: null;
+    totpEnabled?: boolean;
   } = {};
   if (displayName !== undefined) data.displayName = displayName;
   if (active !== undefined) data.active = active;
-  if (password) data.passwordHash = await hashPassword(password);
+  if (password) {
+    data.passwordHash = await hashPassword(password);
+    data.totpSecret = null;
+    data.totpEnabled = false;
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({

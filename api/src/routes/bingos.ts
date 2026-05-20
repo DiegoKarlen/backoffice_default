@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { BingoFigure, BingoRoundStatus, BingoStatus, BingoType, Prisma, RoomStatus } from "@prisma/client";
-import { rescheduleLiveSessionForRoom } from "../bingo-game/live-session.js";
+import { BingoFigure, BingoRoundStatus, BingoStatus, BingoType, Prisma, PrizePayoutMode, RoomStatus } from "@prisma/client";
+import { rescheduleLiveSessionForRoom } from "../game-engine/bingo/live-session.js";
 import { syncScheduledRoundsForBingo } from "../lib/bingo-rounds-sync.js";
 import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
 import { prisma } from "../lib/prisma.js";
@@ -23,6 +23,7 @@ function serializeBingo(b: {
   name: string;
   status: BingoStatus;
   bingoType: BingoType;
+  prizePayoutMode: PrizePayoutMode;
   startDateTime: Date;
   endDateTime: Date | null;
   repeatEveryMinutes: number | null;
@@ -31,7 +32,7 @@ function serializeBingo(b: {
   createdAt: Date;
   updatedAt: Date;
   room?: { id: string; name: string; status: RoomStatus };
-  prizes?: { id: string; bingoId: string; figure: BingoFigure; amount: Prisma.Decimal }[];
+  prizes?: { id: string; bingoId: string; figure: BingoFigure; amount: Prisma.Decimal; uniquePerRound: boolean }[];
 }) {
   return {
     id: b.id,
@@ -40,6 +41,7 @@ function serializeBingo(b: {
     name: b.name,
     status: b.status,
     bingoType: b.bingoType,
+    prizePayoutMode: b.prizePayoutMode,
     startDateTime: b.startDateTime,
     endDateTime: b.endDateTime,
     repeatEveryMinutes: b.repeatEveryMinutes,
@@ -53,6 +55,7 @@ function serializeBingo(b: {
           bingoId: p.bingoId,
           figure: p.figure,
           amount: p.amount.toString(),
+          uniquePerRound: p.uniquePerRound,
         }))
       : undefined,
   };
@@ -61,6 +64,7 @@ function serializeBingo(b: {
 const prizeSchema = z.object({
   figure: z.nativeEnum(BingoFigure),
   amount: z.union([z.string(), z.number()]),
+  uniquePerRound: z.boolean().optional().default(true),
 });
 
 const baseBody = z.object({
@@ -73,6 +77,7 @@ const baseBody = z.object({
   repeatEveryMinutes: z.number().int().min(1).max(10_080).optional().nullable(),
   cardPrice: z.union([z.string(), z.number()]),
   minPlayersToStart: z.number().int().min(1).max(100_000).default(2),
+  prizePayoutMode: z.nativeEnum(PrizePayoutMode).optional(),
   prizes: z.array(prizeSchema).min(1),
 });
 
@@ -104,6 +109,75 @@ function validateScheduleBounds(start: Date, end: Date | null | undefined): stri
     return "endDateTime must be on or after startDateTime";
   }
   return null;
+}
+
+/**
+ * Sincroniza premios sin borrar filas con historial (`PrizePayout` / `DeferredRoundPrizeWin`).
+ * - No elimina una figura si tiene pagos o diferidos pendientes.
+ * - No cambia el **monto** (`amount`) de una figura que ya tenga **`PrizePayout`** (acreditación hecha).
+ *   Las filas `PrizePayout` / `amountCents` no se modifican; la plantilla tampoco puede cambiar de monto en ese caso.
+ *   Si solo hay **`DeferredRoundPrizeWin`** pendiente (aún no liquidado), sí se permite ajustar el monto para las partidas futuras / liquidación pendiente.
+ */
+async function syncBingoPrizesInUpdateTx(
+  tx: Prisma.TransactionClient,
+  bingoId: string,
+  prizes: Array<{ figure: BingoFigure; amount: unknown; uniquePerRound?: boolean }>,
+): Promise<void> {
+  const incomingFigures = prizes.map((p) => p.figure);
+  const orphans = await tx.bingoPrize.findMany({
+    where: { bingoId, figure: { notIn: incomingFigures } },
+    select: {
+      id: true,
+      figure: true,
+      _count: { select: { payouts: true, deferredWins: true } },
+    },
+  });
+  for (const r of orphans) {
+    if (r._count.payouts > 0 || r._count.deferredWins > 0) {
+      const err = new Error(
+        `Cannot remove prize figure ${r.figure}: payouts or pending deferred wins are linked to this prize.`,
+      );
+      err.name = "PrizeRemoveBlocked";
+      throw err;
+    }
+  }
+  for (const r of orphans) {
+    await tx.bingoPrize.delete({ where: { id: r.id } });
+  }
+
+  for (const p of prizes) {
+    const existing = await tx.bingoPrize.findUnique({
+      where: { bingoId_figure: { bingoId, figure: p.figure } },
+      include: { _count: { select: { payouts: true, deferredWins: true } } },
+    });
+    if (existing) {
+      const newAmount = new Prisma.Decimal(toDecimalString(p.amount));
+      const hasPaidPayouts = existing._count.payouts > 0;
+      if (hasPaidPayouts && !existing.amount.equals(newAmount)) {
+        const err = new Error(
+          `Cannot change the prize amount for figure ${p.figure}: there are already recorded prize payouts (credited amounts) for this prize. Those credits are immutable; you can still update "unique per round" or leave the amount unchanged.`,
+        );
+        err.name = "PrizeAmountLocked";
+        throw err;
+      }
+      await tx.bingoPrize.update({
+        where: { id: existing.id },
+        data: {
+          amount: toDecimalString(p.amount),
+          uniquePerRound: p.uniquePerRound ?? true,
+        },
+      });
+    } else {
+      await tx.bingoPrize.create({
+        data: {
+          bingoId,
+          figure: p.figure,
+          amount: toDecimalString(p.amount),
+          uniquePerRound: p.uniquePerRound ?? true,
+        },
+      });
+    }
+  }
 }
 
 function validateBingo(body: {
@@ -159,7 +233,12 @@ bingosRouter.get("/", async (req: AuthedRequest, res) => {
   res.json({ bingos: list.map((b) => serializeBingo(b)) });
 });
 
-/** Partidas del bingo (bolas ordenadas por extracción cuando hay datos persistidos). Query opcional: `from`, `to` (ISO datetime), `sequence`, `status`, `limit` (1–500), `sort` (`asc`|`desc`, por `startsAt`). */
+/**
+ * Partidas del bingo (bolas ordenadas por extracción cuando hay datos persistidos).
+ * Query opcional: `from`, `to` (ISO datetime), `sequence`, `status` (un estado),
+ * `finishedOnly` (`true`|`1`) → `COMPLETED` y `CANCELLED` (útil listado backoffice),
+ * `limit` (1–500), `sort` (`asc`|`desc`, por `startsAt`).
+ */
 bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
   const { id } = req.params;
   const bingo = await prisma.bingo.findFirst({
@@ -176,6 +255,8 @@ bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
   const toRaw = typeof q.to === "string" ? q.to.trim() : "";
   const seqRaw = typeof q.sequence === "string" ? q.sequence.trim() : "";
   const statusRaw = typeof q.status === "string" ? q.status.trim() : "";
+  const finishedOnlyRaw = typeof q.finishedOnly === "string" ? q.finishedOnly.trim().toLowerCase() : "";
+  const finishedOnly = finishedOnlyRaw === "true" || finishedOnlyRaw === "1";
   const limitRaw = typeof q.limit === "string" ? q.limit.trim() : "";
   const sortRaw = typeof q.sort === "string" ? q.sort.trim().toLowerCase() : "";
 
@@ -216,6 +297,8 @@ bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
       return;
     }
     where.status = statusRaw as BingoRoundStatus;
+  } else if (finishedOnly) {
+    where.status = { in: [BingoRoundStatus.COMPLETED, BingoRoundStatus.CANCELLED] };
   }
 
   let take: number | undefined;
@@ -258,6 +341,7 @@ bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
         sequence: r.sequence,
         startsAt: r.startsAt.toISOString(),
         status: r.status,
+        cancellationReason: r.cancellationReason ?? null,
         balls: includeBalls ? nums : [],
       };
     }),
@@ -323,12 +407,14 @@ bingosRouter.post("/", async (req: AuthedRequest, res) => {
       repeatEveryMinutes: body.repeatEveryMinutes ?? null,
       cardPrice: toDecimalString(body.cardPrice),
       minPlayersToStart: body.minPlayersToStart,
+      prizePayoutMode: body.prizePayoutMode ?? PrizePayoutMode.IMMEDIATE_FULL_PER_WINNER,
       createdByUserId: userId ?? null,
       updatedByUserId: userId ?? null,
       prizes: {
         create: body.prizes.map((p) => ({
           figure: p.figure,
           amount: toDecimalString(p.amount),
+          uniquePerRound: p.uniquePerRound ?? true,
         })),
       },
     },
@@ -398,43 +484,44 @@ bingosRouter.put("/:id", async (req: AuthedRequest, res) => {
     }
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const u = await tx.bingo.update({
-      where: { id },
-      data: {
-        ...(body.roomId !== undefined ? { roomId: body.roomId } : {}),
-        name: body.name !== undefined ? body.name.trim() : undefined,
-        status: body.status,
-        bingoType: body.bingoType,
-        startDateTime: body.startDateTime !== undefined ? new Date(body.startDateTime) : undefined,
-        endDateTime:
-          body.endDateTime !== undefined ? (body.endDateTime === null ? null : new Date(body.endDateTime)) : undefined,
-        repeatEveryMinutes:
-          body.repeatEveryMinutes !== undefined ? body.repeatEveryMinutes ?? null : undefined,
-        cardPrice: body.cardPrice !== undefined ? toDecimalString(body.cardPrice) : undefined,
-        minPlayersToStart: body.minPlayersToStart,
-        updatedByUserId: userId ?? null,
-      },
-    });
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.bingo.update({
+        where: { id },
+        data: {
+          ...(body.roomId !== undefined ? { roomId: body.roomId } : {}),
+          name: body.name !== undefined ? body.name.trim() : undefined,
+          status: body.status,
+          bingoType: body.bingoType,
+          startDateTime: body.startDateTime !== undefined ? new Date(body.startDateTime) : undefined,
+          endDateTime:
+            body.endDateTime !== undefined ? (body.endDateTime === null ? null : new Date(body.endDateTime)) : undefined,
+          repeatEveryMinutes:
+            body.repeatEveryMinutes !== undefined ? body.repeatEveryMinutes ?? null : undefined,
+          cardPrice: body.cardPrice !== undefined ? toDecimalString(body.cardPrice) : undefined,
+          minPlayersToStart: body.minPlayersToStart,
+          prizePayoutMode: body.prizePayoutMode,
+          updatedByUserId: userId ?? null,
+        },
+      });
 
-    if (body.prizes !== undefined) {
-      await tx.bingoPrize.deleteMany({ where: { bingoId: id } });
-      if (body.prizes.length > 0) {
-        await tx.bingoPrize.createMany({
-          data: body.prizes.map((p) => ({
-            bingoId: id,
-            figure: p.figure,
-            amount: toDecimalString(p.amount),
-          })),
-        });
+      if (body.prizes !== undefined) {
+        await syncBingoPrizesInUpdateTx(tx, id, body.prizes);
       }
-    }
 
-    return tx.bingo.findFirstOrThrow({
-      where: { id: u.id },
-      include: { prizes: { orderBy: { figure: "asc" } }, room: true },
+      return tx.bingo.findFirstOrThrow({
+        where: { id: u.id },
+        include: { prizes: { orderBy: { figure: "asc" } }, room: true },
+      });
     });
-  });
+  } catch (e) {
+    if (e instanceof Error && (e.name === "PrizeRemoveBlocked" || e.name === "PrizeAmountLocked")) {
+      res.status(409).json({ error: e.message });
+      return;
+    }
+    throw e;
+  }
 
   await syncScheduledRoundsForBingo(updated.id);
   rescheduleLiveSessionForRoom(existing.roomId);

@@ -6,13 +6,17 @@ import {
   getToken,
   getUser,
   hasFunctionality,
+  refreshStoredUser,
   requireAuth,
   setSession,
 } from "./bo-config.js";
-import { api, loginRequest } from "./bo-api.js";
+import { api, loginRequest, loginTotpRequest } from "./bo-api.js";
 import { getLocale, t } from "./bo-i18n.js";
+import { attachBoPager, pagerAnchorFromTbody } from "./bo-pager.js";
 import { initBingosPage } from "./bingo-admin.js";
 import { initRoomsPage } from "./room-admin.js";
+import { initPlayersPage } from "./player-admin.js";
+import QRCode from "qrcode";
 
 function showToast(el, msg, isError) {
   if (!el) return;
@@ -135,6 +139,8 @@ function metaLine(bingoType, cardPrice) {
   return t("home.bingoMetaTemplate", { type: typeNum, price: cardPrice });
 }
 
+const BO_HOME_ROOM_SLUG_KEY = "bo_home_room_slug";
+
 function disposeHomePage() {
   if (window.__boHomeCountdownTimer) {
     clearInterval(window.__boHomeCountdownTimer);
@@ -147,6 +153,8 @@ async function initHomePage() {
   const msg = document.getElementById("bo-home-msg");
   const nextEl = document.getElementById("bo-home-next");
   const upcomingEl = document.getElementById("bo-home-upcoming");
+  const roomSel = document.getElementById("bo-home-room");
+  const roomBar = document.getElementById("bo-home-roombar");
   if (!wrap || !nextEl || !upcomingEl) return;
 
   disposeHomePage();
@@ -160,89 +168,149 @@ async function initHomePage() {
   const listEl = document.getElementById("bo-home-upcoming-list");
   const emptyEl = document.getElementById("bo-home-upcoming-empty");
 
-  try {
-    const data = await api.bingos.upcoming({ limit: 24, horizonDays: 14 });
-    const upcoming = Array.isArray(data?.upcoming) ? data.upcoming : [];
-    const next = data?.next || upcoming[0] || null;
+  async function loadRoomsIntoSelect() {
+    if (!roomSel) return "";
+    roomSel.innerHTML = "";
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = t("home.bingoRoomAll");
+    roomSel.appendChild(opt0);
+    try {
+      const res = await api.rooms.list({ status: "ACTIVE" });
+      const rooms = Array.isArray(res?.rooms) ? res.rooms : [];
+      for (const r of rooms) {
+        if (!r.slug) continue;
+        const o = document.createElement("option");
+        o.value = String(r.slug);
+        o.textContent = r.name ? String(r.name) : String(r.slug);
+        roomSel.appendChild(o);
+      }
+    } catch {
+      /* solo "Todas" */
+    }
+    let saved = "";
+    try {
+      saved = (localStorage.getItem(BO_HOME_ROOM_SLUG_KEY) || "").trim();
+    } catch {
+      /* ignore */
+    }
+    if (saved && [...roomSel.options].some((o) => o.value === saved)) roomSel.value = saved;
+    else roomSel.value = "";
+    return roomSel.value;
+  }
 
-    if (msg) msg.style.display = "none";
+  async function refreshUpcoming(roomSlug) {
+    disposeHomePage();
+    const slug = typeof roomSlug === "string" ? roomSlug.trim() : "";
+    try {
+      const data = await api.bingos.upcoming({
+        limit: 24,
+        horizonDays: 14,
+        roomSlug: slug || undefined,
+      });
+      const upcoming = Array.isArray(data?.upcoming) ? data.upcoming : [];
+      const next = data?.next || upcoming[0] || null;
 
-    if (!next) {
-      nextEl.hidden = true;
+      if (msg) msg.style.display = "none";
+
+      if (!next) {
+        nextEl.hidden = true;
+        upcomingEl.hidden = false;
+        if (listEl) listEl.innerHTML = "";
+        if (emptyEl) emptyEl.style.display = "block";
+        return;
+      }
+
+      nextEl.hidden = false;
       upcomingEl.hidden = false;
-      if (listEl) listEl.innerHTML = "";
-      if (emptyEl) emptyEl.style.display = "block";
-      return;
+      if (emptyEl) emptyEl.style.display = upcoming.length ? "none" : "block";
+
+      if (titleEl) titleEl.textContent = next.name || "—";
+      if (metaEl) metaEl.textContent = metaLine(next.bingoType, next.cardPrice);
+      if (badgeEl) badgeEl.textContent = String(next.bingoType || "").replace(/\D/g, "") || "?";
+
+      const targetMs =
+        typeof next.startsAtMs === "number" ? next.startsAtMs : new Date(next.startsAt).getTime();
+
+      function tick() {
+        const remain = targetMs - Date.now();
+        const cd = formatCountdown(remain);
+        if (cdEl) cdEl.textContent = cd.text;
+        if (cdSubEl) {
+          const sub = cd.subKey ? t(cd.subKey) : "";
+          cdSubEl.textContent = sub || "";
+          cdSubEl.style.display = sub ? "block" : "none";
+        }
+        if (cd.done && window.__boHomeCountdownTimer) {
+          clearInterval(window.__boHomeCountdownTimer);
+          window.__boHomeCountdownTimer = null;
+        }
+        if (startsEl) {
+          startsEl.textContent = `${t("home.bingoStartsAtLabel")}: ${formatStartsAt(next.startsAt)}`;
+        }
+      }
+
+      tick();
+      window.__boHomeCountdownTimer = setInterval(tick, 1000);
+
+      if (listEl) {
+        listEl.innerHTML = "";
+        upcoming.slice(0, 12).forEach((row, idx) => {
+          const li = document.createElement("li");
+          li.className = "bo-home-upcoming__item";
+          const rank = document.createElement("div");
+          rank.className = "bo-home-upcoming__rank mono";
+          rank.textContent = String(idx + 1).padStart(2, "0");
+
+          const body = document.createElement("div");
+          body.className = "bo-home-upcoming__body";
+
+          const line1 = document.createElement("div");
+          line1.className = "bo-home-upcoming__name";
+          line1.textContent = row.name || "—";
+
+          const line2 = document.createElement("div");
+          line2.className = "bo-home-upcoming__when mono";
+          line2.textContent = formatStartsAt(row.startsAt);
+
+          const pill = document.createElement("span");
+          pill.className = "bo-home-upcoming__pill mono";
+          pill.textContent = String(row.bingoType || "").replace(/\D/g, "") || "?";
+
+          body.append(line1, line2);
+          li.append(rank, body, pill);
+          listEl.appendChild(li);
+        });
+      }
+    } catch {
+      if (msg) {
+        msg.style.display = "block";
+        msg.textContent = t("home.bingoLoadError");
+        msg.style.color = "var(--danger, #c0392b)";
+      }
+      nextEl.hidden = true;
+      upcomingEl.hidden = true;
     }
+  }
 
-    nextEl.hidden = false;
-    upcomingEl.hidden = false;
-    if (emptyEl) emptyEl.style.display = upcoming.length ? "none" : "block";
-
-    if (titleEl) titleEl.textContent = next.name || "—";
-    if (metaEl) metaEl.textContent = metaLine(next.bingoType, next.cardPrice);
-    if (badgeEl) badgeEl.textContent = String(next.bingoType || "").replace(/\D/g, "") || "?";
-
-    const targetMs = typeof next.startsAtMs === "number" ? next.startsAtMs : new Date(next.startsAt).getTime();
-
-    function tick() {
-      const remain = targetMs - Date.now();
-      const cd = formatCountdown(remain);
-      if (cdEl) cdEl.textContent = cd.text;
-      if (cdSubEl) {
-        const sub = cd.subKey ? t(cd.subKey) : "";
-        cdSubEl.textContent = sub || "";
-        cdSubEl.style.display = sub ? "block" : "none";
-      }
-      if (cd.done && window.__boHomeCountdownTimer) {
-        clearInterval(window.__boHomeCountdownTimer);
-        window.__boHomeCountdownTimer = null;
-      }
-      if (startsEl) {
-        startsEl.textContent = `${t("home.bingoStartsAtLabel")}: ${formatStartsAt(next.startsAt)}`;
-      }
-    }
-
-    tick();
-    window.__boHomeCountdownTimer = setInterval(tick, 1000);
-
-    if (listEl) {
-      listEl.innerHTML = "";
-      upcoming.slice(0, 12).forEach((row, idx) => {
-        const li = document.createElement("li");
-        li.className = "bo-home-upcoming__item";
-        const rank = document.createElement("div");
-        rank.className = "bo-home-upcoming__rank mono";
-        rank.textContent = String(idx + 1).padStart(2, "0");
-
-        const body = document.createElement("div");
-        body.className = "bo-home-upcoming__body";
-
-        const line1 = document.createElement("div");
-        line1.className = "bo-home-upcoming__name";
-        line1.textContent = row.name || "—";
-
-        const line2 = document.createElement("div");
-        line2.className = "bo-home-upcoming__when mono";
-        line2.textContent = formatStartsAt(row.startsAt);
-
-        const pill = document.createElement("span");
-        pill.className = "bo-home-upcoming__pill mono";
-        pill.textContent = String(row.bingoType || "").replace(/\D/g, "") || "?";
-
-        body.append(line1, line2);
-        li.append(rank, body, pill);
-        listEl.appendChild(li);
+  if (roomSel) {
+    await loadRoomsIntoSelect();
+    if (!roomSel.dataset.boHomeRoomWired) {
+      roomSel.dataset.boHomeRoomWired = "1";
+      roomSel.addEventListener("change", () => {
+        const v = roomSel.value.trim();
+        try {
+          localStorage.setItem(BO_HOME_ROOM_SLUG_KEY, v);
+        } catch {
+          /* ignore */
+        }
+        void refreshUpcoming(v);
       });
     }
-  } catch (ex) {
-    if (msg) {
-      msg.style.display = "block";
-      msg.textContent = t("home.bingoLoadError");
-      msg.style.color = "var(--danger, #c0392b)";
-    }
-    nextEl.hidden = true;
-    upcomingEl.hidden = true;
+    await refreshUpcoming(roomSel.value);
+  } else {
+    if (roomBar) roomBar.hidden = true;
+    await refreshUpcoming("");
   }
 }
 
@@ -252,12 +320,42 @@ function initSignin() {
   const form = document.getElementById("bo-signin-form");
   if (!form) return;
   const err = document.getElementById("bo-signin-error");
+  const stepPw = document.getElementById("bo-step-password");
+  const stepTotp = document.getElementById("bo-step-totp");
+  const totpEmailEl = document.getElementById("bo-totp-email");
+  const totpCode = document.getElementById("bo-totp-code");
+  const totpContinue = document.getElementById("bo-totp-continue");
+  const totpBack = document.getElementById("bo-totp-back");
+
   if (getToken()) {
     const params = new URLSearchParams(window.location.search);
     const next = params.get("next");
     window.location.href = next && next.startsWith("/") ? next : "index.html";
     return;
   }
+
+  let pendingTwoFactorToken = null;
+  let pendingPersist = false;
+
+  function showPasswordStep() {
+    pendingTwoFactorToken = null;
+    if (stepPw) stepPw.hidden = false;
+    if (stepTotp) stepTotp.hidden = true;
+    if (totpCode) totpCode.value = "";
+  }
+
+  function showTotpStep(email, token, persist) {
+    pendingTwoFactorToken = token;
+    pendingPersist = persist;
+    if (stepPw) stepPw.hidden = true;
+    if (stepTotp) stepTotp.hidden = false;
+    if (totpEmailEl) totpEmailEl.textContent = t("signin.totpEmailLine", { email: email || "—" });
+    if (totpCode) {
+      totpCode.value = "";
+      totpCode.focus();
+    }
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     err.style.display = "none";
@@ -267,6 +365,13 @@ function initSignin() {
     try {
       clearSession();
       const data = await loginRequest({ email, password });
+      if (data.requiresTwoFactor && data.twoFactorToken) {
+        showTotpStep(data.user?.email || email, data.twoFactorToken, persist);
+        return;
+      }
+      if (!data.accessToken) {
+        throw new Error(t("errors.loginFailed"));
+      }
       setSession(data.accessToken, data.user, persist);
       const params = new URLSearchParams(window.location.search);
       let next = params.get("next");
@@ -286,6 +391,161 @@ function initSignin() {
       showToast(err, ex.message || t("errors.loginFailed"), true);
     }
   });
+
+  totpContinue?.addEventListener("click", async () => {
+    err.style.display = "none";
+    const code = totpCode?.value?.trim() ?? "";
+    if (!pendingTwoFactorToken) {
+      showToast(err, t("errors.loginFailed"), true);
+      return;
+    }
+    try {
+      const data = await loginTotpRequest({ twoFactorToken: pendingTwoFactorToken, code });
+      if (!data.accessToken) throw new Error(t("errors.loginFailed"));
+      setSession(data.accessToken, data.user, pendingPersist);
+      const params = new URLSearchParams(window.location.search);
+      let next = params.get("next");
+      if (next) {
+        try {
+          next = decodeURIComponent(next);
+        } catch {
+          /* keep */
+        }
+      }
+      if (next && !next.includes("signin.html")) {
+        window.location.href = next.startsWith("/") ? next.slice(1) : next;
+      } else {
+        window.location.href = "index.html";
+      }
+    } catch (ex) {
+      showToast(err, ex.message || t("errors.loginFailed"), true);
+    }
+  });
+
+  totpBack?.addEventListener("click", () => {
+    err.style.display = "none";
+    showPasswordStep();
+  });
+}
+
+function initSecurityPage() {
+  const msg = document.getElementById("bo-security-msg");
+  const status = document.getElementById("bo-security-status");
+  const idle = document.getElementById("bo-security-idle");
+  const setup = document.getElementById("bo-security-setup");
+  const active = document.getElementById("bo-security-active");
+  const btnStart = document.getElementById("bo-security-btn-start");
+  const enableForm = document.getElementById("bo-security-enable-form");
+  const disableForm = document.getElementById("bo-security-disable-form");
+  const disableCancel = document.getElementById("bo-security-disable-cancel");
+  const enableCancel = document.getElementById("bo-security-enable-cancel");
+
+  function paint() {
+    const u = getUser();
+    setup.hidden = true;
+    active.hidden = true;
+    if (!u) {
+      idle.hidden = false;
+      if (status) status.textContent = t("security.statusLoading");
+      if (btnStart) btnStart.disabled = true;
+      return;
+    }
+    idle.hidden = true;
+    if (btnStart) btnStart.disabled = false;
+    if (u.totpEnabled) {
+      active.hidden = false;
+      status.textContent = t("security.statusOn");
+    } else {
+      idle.hidden = false;
+      status.textContent = u.totpPending ? t("security.statusPending") : t("security.statusOff");
+      if (btnStart) {
+        btnStart.textContent = u.totpPending ? t("security.btnRestart") : t("security.btnStart");
+      }
+    }
+  }
+
+  disableCancel?.addEventListener("click", () => {
+    const pwdEl = document.getElementById("bo-disable-password");
+    if (pwdEl) pwdEl.value = "";
+  });
+
+  enableCancel?.addEventListener("click", () => {
+    const codeEl = document.getElementById("bo-enable-code");
+    if (codeEl) codeEl.value = "";
+    setup.hidden = true;
+    idle.hidden = false;
+    paint();
+  });
+
+  btnStart?.addEventListener("click", async () => {
+    if (msg) msg.style.display = "none";
+    try {
+      const data = await api.totpSetup();
+      idle.hidden = true;
+      setup.hidden = false;
+      active.hidden = true;
+      status.textContent = t("security.statusScanning");
+      const secEl = document.getElementById("bo-security-secret");
+      if (secEl) secEl.textContent = data.secret || "";
+      const img = document.getElementById("bo-security-qr");
+      if (img && data.otpauthUrl) {
+        try {
+          img.src = await QRCode.toDataURL(data.otpauthUrl, {
+            width: 200,
+            margin: 2,
+            errorCorrectionLevel: "M",
+            color: { dark: "#111111", light: "#ffffff" },
+          });
+          img.hidden = false;
+        } catch {
+          img.removeAttribute("src");
+          img.hidden = true;
+        }
+      }
+    } catch (ex) {
+      showToast(msg, ex.message, true);
+    }
+  });
+
+  enableForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (msg) msg.style.display = "none";
+    const code = document.getElementById("bo-enable-code")?.value?.trim() ?? "";
+    try {
+      const out = await api.totpEnable({ code });
+      if (out?.user) refreshStoredUser(out.user);
+      else {
+        const data = await api.me();
+        if (data?.user) refreshStoredUser(data.user);
+      }
+      setup.hidden = true;
+      const input = document.getElementById("bo-enable-code");
+      if (input) input.value = "";
+      showToast(msg, t("security.msgEnabled"), false);
+      paint();
+    } catch (ex) {
+      showToast(msg, ex.message, true);
+    }
+  });
+
+  disableForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (msg) msg.style.display = "none";
+    const password = document.getElementById("bo-disable-password")?.value ?? "";
+    try {
+      await api.totpDisable({ password });
+      const data = await api.me();
+      if (data?.user) refreshStoredUser(data.user);
+      const pwdEl = document.getElementById("bo-disable-password");
+      if (pwdEl) pwdEl.value = "";
+      showToast(msg, t("security.msgDisabled"), false);
+      paint();
+    } catch (ex) {
+      showToast(msg, ex.message, true);
+    }
+  });
+
+  paint();
 }
 
 /* --- Users --- */
@@ -554,8 +814,16 @@ function destroyUserRolePickers() {
   editUserRolePickerApi = null;
 }
 
-async function renderUsersTable(tbody) {
-  const { users } = await api.users.list();
+/** @type {Array<Record<string, unknown>>} */
+let usersListCache = [];
+/** @type {ReturnType<typeof attachBoPager> | null} */
+let usersPager = null;
+
+/**
+ * @param {HTMLElement} tbody
+ * @param {Array<Record<string, unknown>>} users
+ */
+function paintUsersPage(tbody, users) {
   tbody.innerHTML = users
     .map(
       (u) => `
@@ -563,9 +831,9 @@ async function renderUsersTable(tbody) {
       <td class="cell-name">${esc(u.email)}</td>
       <td>${esc(u.displayName || "—")}</td>
       <td>${u.active ? `<span class="tag t-active">${t("users.active")}</span>` : `<span class="tag t-old">${t("users.inactive")}</span>`}</td>
-      <td>${u.roles.map((r) => `<span class="tag t-info">${esc(r.code)}</span>`).join(" ")}</td>
+      <td>${/** @type {Array<{ code: string }>} */ (u.roles).map((r) => `<span class="tag t-info">${esc(r.code)}</span>`).join(" ")}</td>
       <td style="text-align:right;"><button type="button" class="btn btn--ghost btn--sm bo-edit-user">${t("users.edit")}</button></td>
-    </tr>`
+    </tr>`,
     )
     .join("");
 
@@ -573,10 +841,26 @@ async function renderUsersTable(tbody) {
     btn.addEventListener("click", () => {
       const tr = btn.closest("tr");
       const id = tr?.dataset?.id;
-      const u = users.find((x) => x.id === id);
-      if (u) openUserEditor(u);
+      const u = usersListCache.find((x) => x.id === id);
+      if (u) openUserEditor(/** @type {Parameters<typeof openUserEditor>[0]} */ (u));
     });
   });
+}
+
+async function renderUsersTable(tbody) {
+  const { users } = await api.users.list();
+  usersListCache = users;
+  const anchor = pagerAnchorFromTbody(tbody);
+  if (!usersPager && anchor) {
+    usersPager = attachBoPager({
+      anchor,
+      getItems: () => usersListCache,
+      renderPage: (slice) => paintUsersPage(tbody, /** @type {typeof usersListCache} */ (slice)),
+    });
+  } else {
+    usersPager?.reset();
+  }
+  usersPager?.refresh();
 }
 
 let editUserPanel = null;
@@ -612,6 +896,7 @@ async function initUsersPage() {
     showToast(document.getElementById("bo-users-msg"), t("errors.noPermissionUsers"), true);
     return;
   }
+  usersPager = null;
   const tbody = document.querySelector("#bo-users-tbody");
   const msg = document.getElementById("bo-users-msg");
   const form = document.getElementById("bo-user-create-form");
@@ -717,8 +1002,17 @@ async function initUsersPage() {
 
 /* --- Roles --- */
 
-async function renderRolesTable(tbody, functionalities) {
-  const { roles } = await api.roles.list();
+/** @type {Array<Record<string, unknown>>} */
+let rolesListCache = [];
+/** @type {ReturnType<typeof attachBoPager> | null} */
+let rolesPager = null;
+
+/**
+ * @param {HTMLElement} tbody
+ * @param {Array<Record<string, unknown>>} roles
+ * @param {Array<Record<string, unknown>>} functionalities
+ */
+function paintRolesPage(tbody, roles, functionalities) {
   tbody.innerHTML = roles
     .map(
       (r) => `
@@ -726,9 +1020,9 @@ async function renderRolesTable(tbody, functionalities) {
       <td class="cell-name">${esc(r.code)}</td>
       <td>${esc(r.name)}</td>
       <td>${esc(r.description || "—")}</td>
-      <td>${r.functionalities.length}</td>
+      <td>${/** @type {Array<unknown>} */ (r.functionalities).length}</td>
       <td style="text-align:right;"><button type="button" class="btn btn--ghost btn--sm bo-edit-role">${t("roles.edit")}</button></td>
-    </tr>`
+    </tr>`,
     )
     .join("");
 
@@ -736,10 +1030,27 @@ async function renderRolesTable(tbody, functionalities) {
     btn.addEventListener("click", () => {
       const tr = btn.closest("tr");
       const id = tr?.dataset?.id;
-      const role = roles.find((x) => x.id === id);
-      if (role) openRoleEditor(role, functionalities);
+      const role = rolesListCache.find((x) => x.id === id);
+      if (role) openRoleEditor(/** @type {Parameters<typeof openRoleEditor>[0]} */ (role), functionalities);
     });
   });
+}
+
+async function renderRolesTable(tbody, functionalities) {
+  const { roles } = await api.roles.list();
+  rolesListCache = roles;
+  const anchor = pagerAnchorFromTbody(tbody);
+  if (!rolesPager && anchor) {
+    rolesPager = attachBoPager({
+      anchor,
+      getItems: () => rolesListCache,
+      renderPage: (slice) =>
+        paintRolesPage(tbody, /** @type {typeof rolesListCache} */ (slice), functionalities),
+    });
+  } else {
+    rolesPager?.reset();
+  }
+  rolesPager?.refresh();
 }
 
 let editRolePanel = null;
@@ -769,6 +1080,7 @@ async function initRolesPage() {
     showToast(document.getElementById("bo-roles-msg"), t("errors.noPermissionRoles"), true);
     return;
   }
+  rolesPager = null;
   const tbody = document.querySelector("#bo-roles-tbody");
   const msg = document.getElementById("bo-roles-msg");
   const form = document.getElementById("bo-role-create-form");
@@ -867,8 +1179,16 @@ async function initRolesPage() {
 
 /* --- Functionalities --- */
 
-async function renderFuncTable(tbody) {
-  const { functionalities } = await api.functionalities.list();
+/** @type {Array<Record<string, unknown>>} */
+let funcListCache = [];
+/** @type {ReturnType<typeof attachBoPager> | null} */
+let funcPager = null;
+
+/**
+ * @param {HTMLElement} tbody
+ * @param {Array<Record<string, unknown>>} functionalities
+ */
+function paintFuncPage(tbody, functionalities) {
   tbody.innerHTML = functionalities
     .map(
       (f) => `
@@ -878,7 +1198,7 @@ async function renderFuncTable(tbody) {
       <td>${esc(f.module || "—")}</td>
       <td>${esc(f.description || "—")}</td>
       <td style="text-align:right;"><button type="button" class="btn btn--ghost btn--sm bo-edit-func">${t("func.edit")}</button></td>
-    </tr>`
+    </tr>`,
     )
     .join("");
 
@@ -886,10 +1206,26 @@ async function renderFuncTable(tbody) {
     btn.addEventListener("click", () => {
       const tr = btn.closest("tr");
       const id = tr?.dataset?.id;
-      const fn = functionalities.find((x) => x.id === id);
-      if (fn) openFuncEditor(fn);
+      const fn = funcListCache.find((x) => x.id === id);
+      if (fn) openFuncEditor(/** @type {Parameters<typeof openFuncEditor>[0]} */ (fn));
     });
   });
+}
+
+async function renderFuncTable(tbody) {
+  const { functionalities } = await api.functionalities.list();
+  funcListCache = functionalities;
+  const anchor = pagerAnchorFromTbody(tbody);
+  if (!funcPager && anchor) {
+    funcPager = attachBoPager({
+      anchor,
+      getItems: () => funcListCache,
+      renderPage: (slice) => paintFuncPage(tbody, /** @type {typeof funcListCache} */ (slice)),
+    });
+  } else {
+    funcPager?.reset();
+  }
+  funcPager?.refresh();
 }
 
 let editFuncPanel = null;
@@ -913,6 +1249,7 @@ async function initFunctionalitiesPage() {
     showToast(document.getElementById("bo-func-msg"), t("errors.noPermissionFunc"), true);
     return;
   }
+  funcPager = null;
   const tbody = document.querySelector("#bo-func-tbody");
   const msg = document.getElementById("bo-func-msg");
   const form = document.getElementById("bo-func-create-form");
@@ -1015,6 +1352,19 @@ export function initAdminPages() {
   /** Todas las páginas con shell exigen sesión (refuerzo junto a index.js). */
   if (!requireAuth()) return;
 
+  void initAdminPagesWithFreshSession(page);
+}
+
+async function initAdminPagesWithFreshSession(page) {
+  try {
+    const data = await api.me();
+    if (data?.user) {
+      refreshStoredUser(data.user);
+    }
+  } catch {
+    /* keep cached user if API unreachable */
+  }
+
   wireLogout();
   filterNavByFunctionality();
   updateShellUserChrome();
@@ -1037,5 +1387,14 @@ export function initAdminPages() {
       return;
     }
     void initBingosPage();
+  } else if (page === "players") {
+    if (!hasFunctionality("bo.players.manage")) {
+      document.querySelector("[data-bo-players-wrap]")?.remove();
+      showToast(document.getElementById("bo-players-msg"), t("errors.noPermissionPlayers"), true);
+      return;
+    }
+    void initPlayersPage();
+  } else if (page === "security") {
+    initSecurityPage();
   }
 }

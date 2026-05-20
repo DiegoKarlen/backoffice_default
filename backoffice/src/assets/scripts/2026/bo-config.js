@@ -41,6 +41,21 @@ export function setSession(token, user, persist) {
   }
 }
 
+/** Update cached user (roles/functionalities) from `GET /auth/me` where the token is stored. */
+export function refreshStoredUser(user) {
+  const serialized = JSON.stringify(user);
+  try {
+    if (sessionStorage.getItem(TOKEN_KEY)) {
+      sessionStorage.setItem(USER_KEY, serialized);
+    }
+    if (localStorage.getItem(TOKEN_KEY)) {
+      localStorage.setItem(USER_KEY, serialized);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function clearSession() {
   try {
     sessionStorage.removeItem(TOKEN_KEY);

@@ -1,9 +1,18 @@
 import type { Request, Response } from "express";
-import { BingoRoundStatus, BingoStatus, type BingoFigure, type BingoType } from "@prisma/client";
-import { buildUpcomingPayload, type UpcomingOccurrence } from "../lib/bingo-upcoming.js";
-import { syncScheduledRoundsForBingo } from "../lib/bingo-rounds-sync.js";
-import { prisma } from "../lib/prisma.js";
-import { ballCountForType, createBallQueue } from "./engine.js";
+import { BingoRoundStatus, BingoStatus, type BingoFigure, type BingoType, PrizePayoutMode } from "@prisma/client";
+import { buildUpcomingPayload, type UpcomingOccurrence } from "../../lib/bingo-upcoming.js";
+import { syncScheduledRoundsForBingo } from "../../lib/bingo-rounds-sync.js";
+import { prisma } from "../../lib/prisma.js";
+import { BingoRoundCancelReason } from "../../lib/bingo-round-cancellation.js";
+import {
+  cancelRoundForMinCartons,
+  countSoldCartons,
+  isTerminalRoundStatus,
+  promoteRoundToDrawing,
+} from "../../lib/bingo-round-kickoff.js";
+import { refundCartonPurchasesForCancelledRound } from "../../services/round-cancellation-refund.js";
+import { settleDeferredSplitPrizesForRound } from "../../services/settle-deferred-split-prizes.js";
+import { ballCountForType, createBallQueue, getBingoEngine } from "./registry.js";
 
 type Phase = "idle" | "drawing";
 
@@ -15,11 +24,7 @@ function envMs(key: string, fallback: number): number {
 let drawIntervalMs = envMs("BINGO_DRAW_INTERVAL_MS", 2200);
 if (drawIntervalMs < 300) drawIntervalMs = 300;
 
-/**
- * Cliente: cuenta 3-2-1 y luego pantalla de sorteo; tras `ROUND_POST_COUNTDOWN_WAIT_MS` sale la 1ª bola.
- * Defaults alineados con `broadcast-manifest.ts` (ROUND_OPENING_TOTAL_MS).
- */
-const ROUND_COUNTDOWN_UI_MS = 5400; /* 3 × ROUND_COUNTDOWN_STEP_MS */
+const ROUND_COUNTDOWN_UI_MS = 5400;
 const ROUND_POST_COUNTDOWN_WAIT_MS = envMs(
   "BINGO_ROUND_POST_COUNTDOWN_WAIT_MS",
   envMs("BINGO_ROUND_BOLILLERO_BEAT_MS", 2000),
@@ -29,7 +34,6 @@ const ROUND_INTRO_MS = envMs(
   ROUND_COUNTDOWN_UI_MS + ROUND_POST_COUNTDOWN_WAIT_MS,
 );
 
-/** Si no hay ocurrencias en horizonte, reconsultar la agenda cada tantos ms. */
 const IDLE_POLL_MS = envMs("BINGO_SCHEDULER_POLL_MS", 60_000);
 
 type SseClient = Response;
@@ -38,30 +42,23 @@ export type LiveSnapshot = {
   phase: Phase;
   serverTime: string;
   drawIntervalMs: number;
-  /** Sala de esta sesión (broadcast independiente por URL). */
   roomSlug: string;
   roomTitle: string;
-  /** Próximo inicio programado según BD (ACTIVE + startDateTime + repeat). */
   nextScheduledAt: string | null;
   nextName: string | null;
   current: null | {
     bingoId: string;
-    /** Partida persistida (cartones / bolas). */
     roundId: string;
-    /** Número de partida dentro del bingo — UI “PARTIDA #N”. */
     roundSequence: number;
     name: string;
     bingoType: BingoType;
     drawn: number[];
     lastBall: number | null;
     remainingInQueue: number;
-    /** Números aún en bolsa (orden ascendente; solo para visualización). */
     remainingBallNumbers: number[];
     totalBalls: number;
     progress: number;
-    /** Instantáneo de agenda de esta ronda (ISO). */
     scheduledStartsAt: string;
-    /** Premios configurados en el bingo (figura + monto). */
     prizes: Array<{ figure: BingoFigure; amount: string }>;
   };
 };
@@ -70,13 +67,12 @@ const sessions = new Map<string, BingoLiveSession>();
 
 class BingoLiveSession {
   private phase: Phase = "idle";
-  private drawTimer: ReturnType<typeof setInterval> | null = null;
+  private drawTimer: ReturnType<typeof setTimeout> | null = null;
   private roundIntroTimeout: ReturnType<typeof setTimeout> | null = null;
   private kickTimer: ReturnType<typeof setTimeout> | null = null;
   private idlePollTimer: ReturnType<typeof setTimeout> | null = null;
 
   private bingoId: string | null = null;
-  /** Resolved label for UI (Room.name fallback Bingo.name). */
   private displayLine: string | null = null;
   private bingoType: BingoType | null = null;
   private scheduledStartsAt: string | null = null;
@@ -84,16 +80,9 @@ class BingoLiveSession {
   private queue: number[] = [];
   private drawn: number[] = [];
 
-  /** Último cupo de agenda ya iniciado (evita repetir el mismo slot). */
   private lastPlayedStartsAtMs: number | null = null;
-
-  /** Si el horario de una partida cayó durante otra, se encola una sola. */
   private pendingOcc: UpcomingOccurrence | null = null;
-
-  /** Próximo evento que estamos esperando (para snapshot / UI). */
   private nextKick: UpcomingOccurrence | null = null;
-
-  /** Durante sorteo: siguiente ocurrencia en agenda después de la partida actual (para contador «próximo sorteo»). */
   private followingKick: UpcomingOccurrence | null = null;
 
   private currentRoundId: string | null = null;
@@ -117,7 +106,7 @@ class BingoLiveSession {
   private clearDrawTimer(): void {
     this.clearRoundIntroTimeout();
     if (this.drawTimer) {
-      clearInterval(this.drawTimer);
+      clearTimeout(this.drawTimer);
       this.drawTimer = null;
     }
   }
@@ -208,7 +197,6 @@ class BingoLiveSession {
     }
   }
 
-  /** Siguiente slot en agenda después de `afterStartsAtMs` (misma sala). */
   private async refreshFollowingKick(afterStartsAtMs: number): Promise<void> {
     const payload = await buildUpcomingPayload(
       { limit: "500", horizonDays: "60" } as Request["query"],
@@ -218,7 +206,6 @@ class BingoLiveSession {
     this.followingKick = payload.upcoming.find((o) => o.startsAtMs > afterStartsAtMs) ?? null;
   }
 
-  /** Programa el siguiente inicio según agenda filtrada por esta sala. */
   private async scheduleNextWake(): Promise<void> {
     this.clearKickTimer();
     this.clearIdlePollTimer();
@@ -307,28 +294,73 @@ class BingoLiveSession {
             bingoId: row.id,
             sequence,
             startsAt: startsAtDate,
-            status: BingoRoundStatus.DRAWING,
+            status: BingoRoundStatus.SCHEDULED,
           },
         });
       } catch {
         round = await prisma.bingoRound.findFirst({
           where: { bingoId: row.id, startsAt: startsAtDate },
         });
-        if (round) {
-          await prisma.bingoRound.update({
-            where: { id: round.id },
-            data: { status: BingoRoundStatus.DRAWING },
-          });
-        }
       }
-    } else if (round.status !== BingoRoundStatus.DRAWING) {
-      await prisma.bingoRound.update({
-        where: { id: round.id },
-        data: { status: BingoRoundStatus.DRAWING },
-      });
     }
 
     if (!round) {
+      this.lastPlayedStartsAtMs = occ.startsAtMs;
+      void this.scheduleNextWake();
+      return;
+    }
+
+    if (isTerminalRoundStatus(round.status)) {
+      this.lastPlayedStartsAtMs = occ.startsAtMs;
+      void this.scheduleNextWake();
+      return;
+    }
+
+    if (round.status === BingoRoundStatus.DRAWING) {
+      this.lastPlayedStartsAtMs = occ.startsAtMs;
+      void this.scheduleNextWake();
+      return;
+    }
+
+    const cartonCount = await countSoldCartons(round.id);
+    if (cartonCount < row.minPlayersToStart) {
+      const cancelled = await cancelRoundForMinCartons(round.id);
+      if (!cancelled) {
+        this.lastPlayedStartsAtMs = occ.startsAtMs;
+        void this.scheduleNextWake();
+        return;
+      }
+      let refundSummary: Awaited<ReturnType<typeof refundCartonPurchasesForCancelledRound>> | null = null;
+      let refundError: string | null = null;
+      try {
+        refundSummary = await refundCartonPurchasesForCancelledRound(round.id);
+      } catch (e) {
+        refundError = e instanceof Error ? e.message : String(e);
+        // eslint-disable-next-line no-console
+        console.error("[live-session] refund after round cancel failed", e);
+      }
+      this.lastPlayedStartsAtMs = occ.startsAtMs;
+      this.broadcast("round_cancelled", {
+        reason: "min_cartons_not_met",
+        minRequired: row.minPlayersToStart,
+        soldCartons: cartonCount,
+        roundId: round.id,
+        bingoId: row.id,
+        refund: refundSummary
+          ? {
+              refundedPurchases: refundSummary.refundedPurchases,
+              totalCentsRefunded: refundSummary.totalCentsRefunded,
+              skippedAlreadyRefunded: refundSummary.skippedAlreadyRefunded,
+            }
+          : undefined,
+        refundError: refundError ?? undefined,
+      });
+      void this.scheduleNextWake();
+      return;
+    }
+
+    const promoted = await promoteRoundToDrawing(round.id);
+    if (!promoted) {
       this.lastPlayedStartsAtMs = occ.startsAtMs;
       void this.scheduleNextWake();
       return;
@@ -338,7 +370,7 @@ class BingoLiveSession {
     this.currentRoundId = round.id;
     this.currentRoundSequence = round.sequence;
     this.bingoId = row.id;
-    this.displayLine = row.room?.name ?? row.name;
+    this.displayLine = row.name;
     this.bingoType = row.bingoType;
     this.scheduledStartsAt = occ.startsAt;
     this.currentPrizes = row.prizes.map((p) => ({ figure: p.figure, amount: p.amount.toString() }));
@@ -363,33 +395,21 @@ class BingoLiveSession {
     this.roundIntroTimeout = setTimeout(() => {
       this.roundIntroTimeout = null;
       this.tickDraw();
-      this.drawTimer = setInterval(() => this.tickDraw(), drawIntervalMs);
     }, ROUND_INTRO_MS);
   }
 
   private endRound(): void {
     this.clearDrawTimer();
+
     const finishedRoundId = this.currentRoundId;
-    if (finishedRoundId) {
-      void prisma.bingoRound
-        .update({
-          where: { id: finishedRoundId },
-          data: { status: BingoRoundStatus.COMPLETED },
-        })
-        .catch(console.error);
-    }
+    const bingoIdSnap = this.bingoId;
+    const roundSequenceSnap = this.currentRoundSequence;
+    const displayLineSnap = this.displayLine;
+    const bingoTypeSnap = this.bingoType;
+    const scheduledStartsAtSnap = this.scheduledStartsAt;
+    const drawnSnap = [...this.drawn];
 
     this.phase = "idle";
-    this.broadcast("round_end", {
-      bingoId: this.bingoId,
-      roundId: finishedRoundId,
-      roundSequence: this.currentRoundSequence,
-      name: this.displayLine,
-      bingoType: this.bingoType,
-      ballsCalled: this.drawn.length,
-      drawn: [...this.drawn],
-      scheduledStartsAt: this.scheduledStartsAt,
-    });
 
     this.currentRoundId = null;
     this.currentRoundSequence = null;
@@ -402,17 +422,57 @@ class BingoLiveSession {
     this.drawn = [];
     this.followingKick = null;
 
-    /** No emitir `state` aquí: en idle tras un sorteo `nextKick` aún no está relleno hasta que
-     *  termina `scheduleNextWake()` (async). El estado previo haría `nextScheduledAt`/`nextName`
-     * null en clients. El `state` correcto lo envía `scheduleNextWake` o `beginScheduledRound`. */
-
     const pending = this.pendingOcc;
     this.pendingOcc = null;
-    if (pending) {
-      void this.beginScheduledRound(pending);
-    } else {
-      void this.scheduleNextWake();
-    }
+
+    void (async () => {
+      try {
+        if (finishedRoundId && bingoIdSnap) {
+          const bingo = await prisma.bingo.findUnique({
+            where: { id: bingoIdSnap },
+            select: { prizePayoutMode: true },
+          });
+          if (bingo?.prizePayoutMode === PrizePayoutMode.DEFERRED_SPLIT_AT_ROUND_END) {
+            await settleDeferredSplitPrizesForRound({ bingoRoundId: finishedRoundId });
+          }
+        }
+        if (finishedRoundId) {
+          await prisma.bingoRound.update({
+            where: { id: finishedRoundId },
+            data: { status: BingoRoundStatus.COMPLETED },
+          });
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[live-session] finalize round (settle + COMPLETED) failed", e);
+        if (finishedRoundId) {
+          await prisma.bingoRound
+            .update({
+              where: { id: finishedRoundId },
+              data: { status: BingoRoundStatus.COMPLETED },
+            })
+            .catch(() => {});
+        }
+      }
+
+      this.broadcast("round_end", {
+        bingoId: bingoIdSnap,
+        roundId: finishedRoundId,
+        roundSequence: roundSequenceSnap,
+        name: displayLineSnap,
+        bingoType: bingoTypeSnap,
+        ballsCalled: drawnSnap.length,
+        drawn: drawnSnap,
+        scheduledStartsAt: scheduledStartsAtSnap,
+      });
+      this.broadcast("state", this.getSnapshot());
+
+      if (pending) {
+        void this.beginScheduledRound(pending);
+      } else {
+        void this.scheduleNextWake();
+      }
+    })();
   }
 
   private tickDraw(): void {
@@ -444,8 +504,72 @@ class BingoLiveSession {
       bingoType: this.bingoType,
     });
     this.broadcast("state", this.getSnapshot());
+
+    const btype = this.bingoType;
+    if (rid && this.bingoId) {
+      void this.afterBall({
+        bingoId: this.bingoId,
+        roundIdSnapshot: rid,
+        drawnSnapshot: [...this.drawn],
+        bingoType: btype,
+      });
+      return;
+    }
+
     if (this.queue.length === 0) {
       this.endRound();
+    } else {
+      this.scheduleNextDrawTick();
+    }
+  }
+
+  private scheduleNextDrawTick(): void {
+    if (this.phase !== "drawing") return;
+    if (this.drawTimer) {
+      clearTimeout(this.drawTimer);
+      this.drawTimer = null;
+    }
+    this.drawTimer = setTimeout(() => {
+      this.drawTimer = null;
+      this.tickDraw();
+    }, drawIntervalMs);
+  }
+
+  private async afterBall(params: {
+    bingoId: string;
+    roundIdSnapshot: string;
+    drawnSnapshot: number[];
+    bingoType: BingoType;
+  }): Promise<void> {
+    const engine = getBingoEngine(params.bingoType);
+    try {
+      const shouldEndRound = await engine.evaluateAfterBall({
+        bingoRoundId: params.roundIdSnapshot,
+        bingoId: params.bingoId,
+        drawnNumbers: params.drawnSnapshot,
+        onPrizeCredited: (payload) => {
+          this.broadcast("prize_awarded", payload);
+        },
+      });
+      if (this.phase !== "drawing") return;
+      if (shouldEndRound) {
+        this.queue = [];
+        this.endRound();
+        return;
+      }
+      if (this.queue.length === 0) {
+        this.endRound();
+        return;
+      }
+      this.scheduleNextDrawTick();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[live-session] afterBall", params.bingoType, err);
+      if (this.phase === "drawing" && this.queue.length > 0) {
+        this.scheduleNextDrawTick();
+      } else if (this.phase === "drawing") {
+        this.endRound();
+      }
     }
   }
 
@@ -453,21 +577,24 @@ class BingoLiveSession {
     void this.scheduleNextWake();
   }
 
-  /**
-   * Relee la agenda desde BD y reprograma el countdown en idle.
-   * Sin esto, un `kickTimer` largo deja UI obsoleta si el bingo se edita/desactiva antes (misma sala: lista vacía vs contador).
-   */
   refreshIdleSchedule(): void {
     if (this.phase !== "idle") return;
     void this.scheduleNextWake();
   }
 
   requestStop(): void {
-    if (this.currentRoundId && this.phase === "drawing") {
+    const rid = this.currentRoundId;
+    if (rid && this.phase === "drawing") {
+      void prisma.deferredRoundPrizeWin
+        .deleteMany({ where: { bingoRoundId: rid } })
+        .catch((err) => console.error("[live-session] delete deferred wins on manual stop", err));
       void prisma.bingoRound
         .update({
-          where: { id: this.currentRoundId },
-          data: { status: BingoRoundStatus.CANCELLED },
+          where: { id: rid },
+          data: {
+            status: BingoRoundStatus.CANCELLED,
+            cancellationReason: BingoRoundCancelReason.MANUAL_STOP,
+          },
         })
         .catch(console.error);
     }
@@ -508,7 +635,6 @@ class BingoLiveSession {
   }
 }
 
-/** Crea y arranca la sesión en vivo para una sala (un scheduler por roomId). */
 export function registerLiveSession(room: { id: string; slug: string; name: string }): BingoLiveSession {
   let s = sessions.get(room.id);
   if (s) return s;
@@ -530,7 +656,6 @@ export async function ensureLiveSessionForRoom(roomId: string): Promise<BingoLiv
   return registerLiveSession(room);
 }
 
-/** Tras crear/editar/desactivar/borrar un bingo: sincroniza el scheduler en memoria con la BD (solo en idle). */
 export function rescheduleLiveSessionForRoom(roomId: string): void {
   const s = sessions.get(roomId);
   if (!s) return;

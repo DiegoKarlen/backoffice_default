@@ -15,6 +15,22 @@ export async function loginRequest(body) {
   return data;
 }
 
+/** Second step after `login` returned `requiresTwoFactor` (TOTP / authenticator app). */
+export async function loginTotpRequest(body) {
+  const url = `${getApiBase().replace(/\/$/, "")}/auth/login/totp`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.error || res.statusText || "Two-factor verification failed";
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  return data;
+}
+
 async function apiJson(path, options = {}) {
   const url = `${getApiBase().replace(/\/$/, "")}${path}`;
   const headers = {
@@ -23,7 +39,11 @@ async function apiJson(path, options = {}) {
   };
   const t = getToken();
   if (t) headers.Authorization = `Bearer ${t}`;
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(url, {
+    cache: "no-store",
+    ...options,
+    headers,
+  });
   const text = await res.text();
   let data = null;
   try {
@@ -40,6 +60,10 @@ async function apiJson(path, options = {}) {
 
 export const api = {
   me: () => apiJson("/auth/me"),
+
+  totpSetup: () => apiJson("/auth/totp/setup", { method: "POST", body: "{}" }),
+  totpEnable: (body) => apiJson("/auth/totp/enable", { method: "POST", body: JSON.stringify(body) }),
+  totpDisable: (body) => apiJson("/auth/totp/disable", { method: "POST", body: JSON.stringify(body) }),
 
   users: {
     list: () => apiJson("/users"),
@@ -106,6 +130,7 @@ export const api = {
       if (query?.to) q.set("to", query.to);
       if (query?.sequence != null && query.sequence !== "") q.set("sequence", String(query.sequence));
       if (query?.status) q.set("status", query.status);
+      if (query?.finishedOnly) q.set("finishedOnly", String(query.finishedOnly));
       if (query?.limit != null && query.limit !== "") q.set("limit", String(query.limit));
       if (query?.sort) q.set("sort", query.sort);
       const s = q.toString();
@@ -115,8 +140,43 @@ export const api = {
       const q = new URLSearchParams();
       if (query?.limit != null) q.set("limit", String(query.limit));
       if (query?.horizonDays != null) q.set("horizonDays", String(query.horizonDays));
+      if (query?.roomSlug != null && String(query.roomSlug).trim() !== "") {
+        q.set("roomSlug", String(query.roomSlug).trim());
+      }
       const s = q.toString();
       return apiJson(`/backoffice/bingos/upcoming${s ? `?${s}` : ""}`);
     },
+  },
+
+  players: {
+    list: (query) => {
+      const q = new URLSearchParams();
+      if (query?.q) q.set("q", query.q);
+      if (query?.limit != null && query.limit !== "") q.set("limit", String(query.limit));
+      const s = q.toString();
+      return apiJson(`/backoffice/players${s ? `?${s}` : ""}`);
+    },
+    manualCredit: (playerId, body) =>
+      apiJson(`/backoffice/players/${playerId}/wallet/manual-credits`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    purchases: (playerId) => apiJson(`/backoffice/players/${playerId}/purchases`),
+    prizePayouts: (playerId) => apiJson(`/backoffice/players/${playerId}/prize-payouts`),
+    prizeCredit: (playerId, body) =>
+      apiJson(`/backoffice/players/${playerId}/prize-credits`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    walletTransactions: (playerId, query) => {
+      const q = new URLSearchParams();
+      if (query?.limit != null) q.set("limit", String(query.limit));
+      if (query?.from) q.set("from", query.from);
+      if (query?.to) q.set("to", query.to);
+      const s = q.toString();
+      return apiJson(`/backoffice/players/${playerId}/wallet/transactions${s ? `?${s}` : ""}`);
+    },
+    walletTransactionCardDetail: (playerId, transactionId) =>
+      apiJson(`/backoffice/players/${playerId}/wallet/transactions/${transactionId}/card-detail`),
   },
 };
