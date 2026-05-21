@@ -1,5 +1,11 @@
 import type { Request, Response } from "express";
-import { BingoRoundStatus, BingoStatus, type BingoFigure, type BingoType, PrizePayoutMode } from "@prisma/client";
+import {
+  BingoDrawMode,
+  BingoRoundStatus,
+  BingoStatus,
+  type BingoFigure,
+  type BingoType,
+} from "@prisma/client";
 import { buildUpcomingPayload, type UpcomingOccurrence } from "../../lib/bingo-upcoming.js";
 import { syncScheduledRoundsForBingo } from "../../lib/bingo-rounds-sync.js";
 import { prisma } from "../../lib/prisma.js";
@@ -11,6 +17,7 @@ import {
   promoteRoundToDrawing,
 } from "../../lib/bingo-round-kickoff.js";
 import { refundCartonPurchasesForCancelledRound } from "../../services/round-cancellation-refund.js";
+import { bingoPrizeDisplayAmount } from "../../lib/bingo-prize-display.js";
 import { settleDeferredSplitPrizesForRound } from "../../services/settle-deferred-split-prizes.js";
 import { ballCountForType, createBallQueue, getBingoEngine } from "./registry.js";
 
@@ -46,6 +53,8 @@ export type LiveSnapshot = {
   roomTitle: string;
   nextScheduledAt: string | null;
   nextName: string | null;
+  /** `BingoRound.sequence` del próximo sorteo (idle: `nextKick`; en curso: `followingKick`). */
+  nextRoundSequence: number | null;
   current: null | {
     bingoId: string;
     roundId: string;
@@ -59,7 +68,10 @@ export type LiveSnapshot = {
     totalBalls: number;
     progress: number;
     scheduledStartsAt: string;
-    prizes: Array<{ figure: BingoFigure; amount: string }>;
+    drawMode: BingoDrawMode;
+    canMarkLiveBall: boolean;
+    prizeMode: string;
+    prizes: Array<{ figure: BingoFigure; amount: string; displayAmount: string }>;
   };
 };
 
@@ -75,8 +87,11 @@ class BingoLiveSession {
   private bingoId: string | null = null;
   private displayLine: string | null = null;
   private bingoType: BingoType | null = null;
+  private drawMode: BingoDrawMode = BingoDrawMode.VIRTUAL;
   private scheduledStartsAt: string | null = null;
-  private currentPrizes: Array<{ figure: BingoFigure; amount: string }> | null = null;
+  private currentPrizeMode: string | null = null;
+  private currentPrizes: Array<{ figure: BingoFigure; amount: string; displayAmount: string }> | null =
+    null;
   private queue: number[] = [];
   private drawn: number[] = [];
 
@@ -131,6 +146,20 @@ class BingoLiveSession {
     this.clearIdlePollTimer();
   }
 
+  private remainingBallNumbersForSnapshot(): number[] {
+    if (!this.bingoType) return [];
+    if (this.drawMode === BingoDrawMode.VIRTUAL) {
+      return [...this.queue].sort((a, b) => a - b);
+    }
+    const total = ballCountForType(this.bingoType);
+    const drawnSet = new Set(this.drawn);
+    const out: number[] = [];
+    for (let n = 1; n <= total; n++) {
+      if (!drawnSet.has(n)) out.push(n);
+    }
+    return out;
+  }
+
   getSnapshot(): LiveSnapshot {
     const total = this.bingoType ? ballCountForType(this.bingoType) : 0;
     const progress = total ? this.drawn.length / total : 0;
@@ -148,10 +177,10 @@ class BingoLiveSession {
       sched &&
       roundId != null &&
       this.currentRoundSequence != null;
-    const nextSched =
-      this.phase === "drawing" ? this.followingKick?.startsAt ?? null : this.nextKick?.startsAt ?? null;
-    const nextNm =
-      this.phase === "drawing" ? this.followingKick?.name ?? null : this.nextKick?.name ?? null;
+    const nextOcc = this.phase === "drawing" ? this.followingKick : this.nextKick;
+    const nextSched = nextOcc?.startsAt ?? null;
+    const nextNm = nextOcc?.name ?? null;
+    const nextRoundSeq = nextOcc?.roundSequence ?? null;
 
     return {
       phase: this.phase,
@@ -161,6 +190,7 @@ class BingoLiveSession {
       roomTitle: this.roomTitle,
       nextScheduledAt: nextSched,
       nextName: nextNm,
+      nextRoundSequence: nextRoundSeq,
       current:
         !hasCtx
           ? null
@@ -172,11 +202,19 @@ class BingoLiveSession {
               bingoType: btype,
               drawn: [...this.drawn],
               lastBall: this.drawn.length ? this.drawn[this.drawn.length - 1]! : null,
-              remainingInQueue: this.queue.length,
-              remainingBallNumbers: [...this.queue].sort((a, b) => a - b),
+              remainingInQueue:
+                this.drawMode === BingoDrawMode.VIRTUAL
+                  ? this.queue.length
+                  : this.remainingBallNumbersForSnapshot().length,
+              remainingBallNumbers: this.remainingBallNumbersForSnapshot(),
               totalBalls: total,
               progress,
               scheduledStartsAt: sched,
+              drawMode: this.drawMode,
+              /** Bingo Live: solo mientras la partida está en curso (no tras cartón lleno / cierre). */
+              canMarkLiveBall:
+                this.drawMode === BingoDrawMode.LIVE && this.phase === "drawing",
+              prizeMode: this.currentPrizeMode ?? "FIXED",
               prizes,
             },
     };
@@ -372,9 +410,15 @@ class BingoLiveSession {
     this.bingoId = row.id;
     this.displayLine = row.name;
     this.bingoType = row.bingoType;
+    this.drawMode = row.drawMode;
     this.scheduledStartsAt = occ.startsAt;
-    this.currentPrizes = row.prizes.map((p) => ({ figure: p.figure, amount: p.amount.toString() }));
-    this.queue = createBallQueue(row.bingoType);
+    this.currentPrizeMode = row.prizeMode;
+    this.currentPrizes = row.prizes.map((p) => ({
+      figure: p.figure,
+      amount: p.amount.toString(),
+      displayAmount: bingoPrizeDisplayAmount(row.prizeMode, p),
+    }));
+    this.queue = row.drawMode === BingoDrawMode.VIRTUAL ? createBallQueue(row.bingoType) : [];
     this.drawn = [];
     this.phase = "drawing";
     this.nextKick = null;
@@ -386,6 +430,7 @@ class BingoLiveSession {
       roundSequence: round.sequence,
       name: this.displayLine,
       bingoType: row.bingoType,
+      drawMode: row.drawMode,
       totalBalls: ballCountForType(row.bingoType),
       scheduledStartsAt: occ.startsAt,
     });
@@ -394,7 +439,9 @@ class BingoLiveSession {
     this.clearDrawTimer();
     this.roundIntroTimeout = setTimeout(() => {
       this.roundIntroTimeout = null;
-      this.tickDraw();
+      if (this.drawMode === BingoDrawMode.VIRTUAL) {
+        this.tickDraw();
+      }
     }, ROUND_INTRO_MS);
   }
 
@@ -416,7 +463,9 @@ class BingoLiveSession {
     this.bingoId = null;
     this.displayLine = null;
     this.bingoType = null;
+    this.drawMode = BingoDrawMode.VIRTUAL;
     this.scheduledStartsAt = null;
+    this.currentPrizeMode = null;
     this.currentPrizes = null;
     this.queue = [];
     this.drawn = [];
@@ -427,14 +476,8 @@ class BingoLiveSession {
 
     void (async () => {
       try {
-        if (finishedRoundId && bingoIdSnap) {
-          const bingo = await prisma.bingo.findUnique({
-            where: { id: bingoIdSnap },
-            select: { prizePayoutMode: true },
-          });
-          if (bingo?.prizePayoutMode === PrizePayoutMode.DEFERRED_SPLIT_AT_ROUND_END) {
-            await settleDeferredSplitPrizesForRound({ bingoRoundId: finishedRoundId });
-          }
+        if (finishedRoundId) {
+          await settleDeferredSplitPrizesForRound({ bingoRoundId: finishedRoundId });
         }
         if (finishedRoundId) {
           await prisma.bingoRound.update({
@@ -475,17 +518,12 @@ class BingoLiveSession {
     })();
   }
 
-  private tickDraw(): void {
+  private async commitDrawnBall(ball: number): Promise<void> {
     if (this.phase !== "drawing" || !this.bingoType) return;
-    const ball = this.queue.shift();
-    if (ball === undefined) {
-      this.endRound();
-      return;
-    }
     this.drawn.push(ball);
     const rid = this.currentRoundId;
     if (rid) {
-      void prisma.bingoRoundBall
+      await prisma.bingoRoundBall
         .create({
           data: {
             roundId: rid,
@@ -498,7 +536,10 @@ class BingoLiveSession {
     this.broadcast("ball", {
       ball,
       drawn: [...this.drawn],
-      remainingInQueue: this.queue.length,
+      remainingInQueue:
+        this.drawMode === BingoDrawMode.VIRTUAL
+          ? this.queue.length
+          : this.remainingBallNumbersForSnapshot().length,
       bingoId: this.bingoId,
       name: this.displayLine,
       bingoType: this.bingoType,
@@ -507,20 +548,63 @@ class BingoLiveSession {
 
     const btype = this.bingoType;
     if (rid && this.bingoId) {
-      void this.afterBall({
+      await this.afterBall({
         bingoId: this.bingoId,
         roundIdSnapshot: rid,
         drawnSnapshot: [...this.drawn],
         bingoType: btype,
       });
+    }
+  }
+
+  private tickDraw(): void {
+    if (this.phase !== "drawing" || !this.bingoType || this.drawMode !== BingoDrawMode.VIRTUAL) return;
+    const ball = this.queue.shift();
+    if (ball === undefined) {
+      this.endRound();
       return;
     }
+    void this.commitDrawnBall(ball).then(() => {
+      if (this.phase !== "drawing") return;
+      if (this.queue.length === 0) {
+        this.endRound();
+      } else {
+        this.scheduleNextDrawTick();
+      }
+    });
+  }
 
-    if (this.queue.length === 0) {
-      this.endRound();
-    } else {
-      this.scheduleNextDrawTick();
+  /** Operador en display (bingo Live): registra la bola que salió en el video. */
+  async registerDrawnBall(ballNumber: number): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (this.phase !== "drawing") {
+      return { ok: false, status: 409, error: "La partida ya finalizó; no se pueden marcar más bolas." };
     }
+    if (this.drawMode !== BingoDrawMode.LIVE) {
+      return { ok: false, status: 409, error: "Bingo is not in Live draw mode" };
+    }
+    if (!this.bingoType) {
+      return { ok: false, status: 409, error: "Round context missing" };
+    }
+    const roundId = this.currentRoundId;
+    if (!roundId) {
+      return { ok: false, status: 409, error: "La partida ya finalizó; no se pueden marcar más bolas." };
+    }
+    const roundRow = await prisma.bingoRound.findUnique({
+      where: { id: roundId },
+      select: { status: true },
+    });
+    if (roundRow?.status !== BingoRoundStatus.DRAWING) {
+      return { ok: false, status: 409, error: "La partida ya finalizó; no se pueden marcar más bolas." };
+    }
+    const total = ballCountForType(this.bingoType);
+    if (!Number.isInteger(ballNumber) || ballNumber < 1 || ballNumber > total) {
+      return { ok: false, status: 400, error: `Ball number must be between 1 and ${total}` };
+    }
+    if (this.drawn.includes(ballNumber)) {
+      return { ok: false, status: 409, error: "Ball already drawn" };
+    }
+    await this.commitDrawnBall(ballNumber);
+    return { ok: true };
   }
 
   private scheduleNextDrawTick(): void {
@@ -557,17 +641,20 @@ class BingoLiveSession {
         this.endRound();
         return;
       }
-      if (this.queue.length === 0) {
-        this.endRound();
-        return;
+      if (this.drawMode === BingoDrawMode.VIRTUAL) {
+        if (this.queue.length === 0) {
+          this.endRound();
+          return;
+        }
+        this.scheduleNextDrawTick();
       }
-      this.scheduleNextDrawTick();
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[live-session] afterBall", params.bingoType, err);
-      if (this.phase === "drawing" && this.queue.length > 0) {
+      if (this.phase !== "drawing") return;
+      if (this.drawMode === BingoDrawMode.VIRTUAL && this.queue.length > 0) {
         this.scheduleNextDrawTick();
-      } else if (this.phase === "drawing") {
+      } else if (this.drawMode === BingoDrawMode.VIRTUAL) {
         this.endRound();
       }
     }
@@ -609,7 +696,9 @@ class BingoLiveSession {
     this.bingoId = null;
     this.displayLine = null;
     this.bingoType = null;
+    this.drawMode = BingoDrawMode.VIRTUAL;
     this.scheduledStartsAt = null;
+    this.currentPrizeMode = null;
     this.currentPrizes = null;
     this.queue = [];
     this.drawn = [];
@@ -660,6 +749,17 @@ export function rescheduleLiveSessionForRoom(roomId: string): void {
   const s = sessions.get(roomId);
   if (!s) return;
   s.refreshIdleSchedule();
+}
+
+export async function registerDrawnBallForRoom(
+  roomId: string,
+  ballNumber: number,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const session = sessions.get(roomId);
+  if (!session) {
+    return { ok: false, status: 404, error: "Live session not found for room" };
+  }
+  return session.registerDrawnBall(ballNumber);
 }
 
 void prisma.room.findMany().then((rooms) => {

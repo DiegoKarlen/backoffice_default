@@ -1,9 +1,20 @@
 import { Router } from "express";
 import { z } from "zod";
-import { BingoFigure, BingoRoundStatus, BingoStatus, BingoType, Prisma, PrizePayoutMode, RoomStatus } from "@prisma/client";
+import {
+  BingoDrawMode,
+  BingoFigure,
+  BingoPrizeMode,
+  BingoRoundStatus,
+  BingoStatus,
+  BingoType,
+  Prisma,
+  PrizePayoutMode,
+  RoomStatus,
+} from "@prisma/client";
 import { rescheduleLiveSessionForRoom } from "../game-engine/bingo/live-session.js";
 import { syncScheduledRoundsForBingo } from "../lib/bingo-rounds-sync.js";
 import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
+import { getRoundPrizesForBo, getRoundPurchasedCardsForBo } from "../lib/bingo-round-bo-detail.js";
 import { prisma } from "../lib/prisma.js";
 import { type AuthedRequest, requireAuth } from "../middleware/auth.js";
 
@@ -24,15 +35,24 @@ function serializeBingo(b: {
   status: BingoStatus;
   bingoType: BingoType;
   prizePayoutMode: PrizePayoutMode;
+  drawMode: BingoDrawMode;
   startDateTime: Date;
   endDateTime: Date | null;
   repeatEveryMinutes: number | null;
   cardPrice: Prisma.Decimal;
+  prizeMode: BingoPrizeMode;
+  prizePoolSeed: Prisma.Decimal;
   minPlayersToStart: number;
   createdAt: Date;
   updatedAt: Date;
   room?: { id: string; name: string; status: RoomStatus };
-  prizes?: { id: string; bingoId: string; figure: BingoFigure; amount: Prisma.Decimal; uniquePerRound: boolean }[];
+  prizes?: {
+    id: string;
+    bingoId: string;
+    figure: BingoFigure;
+    amount: Prisma.Decimal;
+    uniquePerRound: boolean;
+  }[];
 }) {
   return {
     id: b.id,
@@ -42,10 +62,13 @@ function serializeBingo(b: {
     status: b.status,
     bingoType: b.bingoType,
     prizePayoutMode: b.prizePayoutMode,
+    drawMode: b.drawMode,
     startDateTime: b.startDateTime,
     endDateTime: b.endDateTime,
     repeatEveryMinutes: b.repeatEveryMinutes,
     cardPrice: b.cardPrice.toString(),
+    prizeMode: b.prizeMode,
+    prizePoolSeed: b.prizePoolSeed.toString(),
     minPlayersToStart: b.minPlayersToStart,
     createdAt: b.createdAt,
     updatedAt: b.updatedAt,
@@ -76,8 +99,11 @@ const baseBody = z.object({
   endDateTime: z.union([z.string().datetime(), z.null()]).optional(),
   repeatEveryMinutes: z.number().int().min(1).max(10_080).optional().nullable(),
   cardPrice: z.union([z.string(), z.number()]),
+  prizeMode: z.nativeEnum(BingoPrizeMode).optional(),
+  prizePoolSeed: z.union([z.string(), z.number()]).optional(),
   minPlayersToStart: z.number().int().min(1).max(100_000).default(2),
   prizePayoutMode: z.nativeEnum(PrizePayoutMode).optional(),
+  drawMode: z.nativeEnum(BingoDrawMode).optional(),
   prizes: z.array(prizeSchema).min(1),
 });
 
@@ -91,7 +117,20 @@ const updateSchema = baseBody.partial().extend({
   prizes: z.array(prizeSchema).min(1).optional(),
 });
 
-function validatePrizes(prizes: Array<{ figure: BingoFigure; amount: unknown }>): string | null {
+type PrizeBody = z.infer<typeof prizeSchema>;
+
+function prizeRowDbData(p: PrizeBody): { amount: string; uniquePerRound: boolean } {
+  return {
+    amount: toDecimalString(p.amount),
+    uniquePerRound: p.uniquePerRound ?? true,
+  };
+}
+
+function validatePrizes(
+  prizes: PrizeBody[],
+  prizeMode: BingoPrizeMode,
+  prizePoolSeed?: unknown,
+): string | null {
   if (!prizes.length) return "At least one prize is required";
   const seen = new Set<string>();
   for (const p of prizes) {
@@ -99,9 +138,26 @@ function validatePrizes(prizes: Array<{ figure: BingoFigure; amount: unknown }>)
     if (seen.has(key)) return `Duplicate prize figure: ${key}`;
     seen.add(key);
     const n = Number(toDecimalString(p.amount));
-    if (!Number.isFinite(n) || n <= 0) return `Prize amount must be a positive number (${key})`;
+    if (!Number.isFinite(n) || n <= 0) {
+      return prizeMode === BingoPrizeMode.PERCENTAGE
+        ? `Prize percent must be a positive number (${key})`
+        : `Prize amount must be a positive number (${key})`;
+    }
+    if (prizeMode === BingoPrizeMode.PERCENTAGE && n > 100) {
+      return `Prize percent must be at most 100 (${key})`;
+    }
+  }
+  if (prizeMode === BingoPrizeMode.PERCENTAGE) {
+    const seed = Number(toDecimalString(prizePoolSeed ?? 0));
+    if (!Number.isFinite(seed) || seed < 0) {
+      return "prizePoolSeed must be a non-negative number when prize mode is PERCENTAGE";
+    }
   }
   return null;
+}
+
+function prizeAmountDiffers(existing: { amount: Prisma.Decimal }, incomingAmount: string): boolean {
+  return !existing.amount.equals(new Prisma.Decimal(incomingAmount));
 }
 
 function validateScheduleBounds(start: Date, end: Date | null | undefined): string | null {
@@ -121,7 +177,7 @@ function validateScheduleBounds(start: Date, end: Date | null | undefined): stri
 async function syncBingoPrizesInUpdateTx(
   tx: Prisma.TransactionClient,
   bingoId: string,
-  prizes: Array<{ figure: BingoFigure; amount: unknown; uniquePerRound?: boolean }>,
+  prizes: PrizeBody[],
 ): Promise<void> {
   const incomingFigures = prizes.map((p) => p.figure);
   const orphans = await tx.bingoPrize.findMany({
@@ -150,10 +206,10 @@ async function syncBingoPrizesInUpdateTx(
       where: { bingoId_figure: { bingoId, figure: p.figure } },
       include: { _count: { select: { payouts: true, deferredWins: true } } },
     });
+    const row = prizeRowDbData(p);
     if (existing) {
-      const newAmount = new Prisma.Decimal(toDecimalString(p.amount));
       const hasPaidPayouts = existing._count.payouts > 0;
-      if (hasPaidPayouts && !existing.amount.equals(newAmount)) {
+      if (hasPaidPayouts && prizeAmountDiffers(existing, row.amount)) {
         const err = new Error(
           `Cannot change the prize amount for figure ${p.figure}: there are already recorded prize payouts (credited amounts) for this prize. Those credits are immutable; you can still update "unique per round" or leave the amount unchanged.`,
         );
@@ -162,18 +218,14 @@ async function syncBingoPrizesInUpdateTx(
       }
       await tx.bingoPrize.update({
         where: { id: existing.id },
-        data: {
-          amount: toDecimalString(p.amount),
-          uniquePerRound: p.uniquePerRound ?? true,
-        },
+        data: row,
       });
     } else {
       await tx.bingoPrize.create({
         data: {
           bingoId,
           figure: p.figure,
-          amount: toDecimalString(p.amount),
-          uniquePerRound: p.uniquePerRound ?? true,
+          ...row,
         },
       });
     }
@@ -311,12 +363,12 @@ bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
     take = n;
   }
 
-  const sortDesc = sortRaw === "desc";
   if (sortRaw !== "" && sortRaw !== "asc" && sortRaw !== "desc") {
     res.status(400).json({ error: "sort must be asc or desc" });
     return;
   }
-  const orderDir = sortDesc ? "desc" : "asc";
+  /** Backoffice: por defecto más reciente primero (startsAt / sequence desc). */
+  const orderDir = sortRaw === "asc" ? "asc" : "desc";
 
   const rounds = await prisma.bingoRound.findMany({
     where,
@@ -324,8 +376,22 @@ bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
     ...(take != null ? { take } : {}),
     include: {
       balls: { orderBy: { drawOrder: "asc" }, select: { number: true } },
+      _count: { select: { playerRoundCards: true } },
     },
   });
+
+  const roundIds = rounds.map((r) => r.id);
+  const prizeCountByRound = new Map<string, number>();
+  if (roundIds.length > 0) {
+    const payouts = await prisma.prizePayout.findMany({
+      where: { playerRoundCard: { bingoRoundId: { in: roundIds } } },
+      select: { playerRoundCard: { select: { bingoRoundId: true } } },
+    });
+    for (const p of payouts) {
+      const rid = p.playerRoundCard.bingoRoundId;
+      prizeCountByRound.set(rid, (prizeCountByRound.get(rid) ?? 0) + 1);
+    }
+  }
 
   res.json({
     bingoId: bingo.id,
@@ -343,9 +409,43 @@ bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
         status: r.status,
         cancellationReason: r.cancellationReason ?? null,
         balls: includeBalls ? nums : [],
+        cardsSold: r._count.playerRoundCards,
+        prizesPaid: prizeCountByRound.get(r.id) ?? 0,
       };
     }),
   });
+});
+
+const roundIdParam = z.string().uuid();
+
+bingosRouter.get("/:id/rounds/:roundId/cards", async (req: AuthedRequest, res) => {
+  const bingoId = req.params.id;
+  const roundParsed = roundIdParam.safeParse(req.params.roundId);
+  if (!roundParsed.success) {
+    res.status(400).json({ error: "Invalid round id" });
+    return;
+  }
+  const result = await getRoundPurchasedCardsForBo({ bingoId, roundId: roundParsed.data });
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+});
+
+bingosRouter.get("/:id/rounds/:roundId/prizes", async (req: AuthedRequest, res) => {
+  const bingoId = req.params.id;
+  const roundParsed = roundIdParam.safeParse(req.params.roundId);
+  if (!roundParsed.success) {
+    res.status(400).json({ error: "Invalid round id" });
+    return;
+  }
+  const result = await getRoundPrizesForBo({ bingoId, roundId: roundParsed.data });
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json(result);
 });
 
 bingosRouter.get("/:id", async (req: AuthedRequest, res) => {
@@ -374,7 +474,8 @@ bingosRouter.post("/", async (req: AuthedRequest, res) => {
     res.status(400).json({ error: vErr });
     return;
   }
-  const pErr = validatePrizes(body.prizes);
+  const prizeMode = body.prizeMode ?? BingoPrizeMode.FIXED;
+  const pErr = validatePrizes(body.prizes, prizeMode, body.prizePoolSeed);
   if (pErr) {
     res.status(400).json({ error: pErr });
     return;
@@ -406,15 +507,20 @@ bingosRouter.post("/", async (req: AuthedRequest, res) => {
       endDateTime: endDt,
       repeatEveryMinutes: body.repeatEveryMinutes ?? null,
       cardPrice: toDecimalString(body.cardPrice),
+      prizeMode,
+      prizePoolSeed:
+        prizeMode === BingoPrizeMode.PERCENTAGE
+          ? toDecimalString(body.prizePoolSeed ?? 0)
+          : "0",
       minPlayersToStart: body.minPlayersToStart,
       prizePayoutMode: body.prizePayoutMode ?? PrizePayoutMode.IMMEDIATE_FULL_PER_WINNER,
+      drawMode: body.drawMode ?? BingoDrawMode.VIRTUAL,
       createdByUserId: userId ?? null,
       updatedByUserId: userId ?? null,
       prizes: {
         create: body.prizes.map((p) => ({
           figure: p.figure,
-          amount: toDecimalString(p.amount),
-          uniquePerRound: p.uniquePerRound ?? true,
+          ...prizeRowDbData(p),
         })),
       },
     },
@@ -453,10 +559,21 @@ bingosRouter.put("/:id", async (req: AuthedRequest, res) => {
     res.status(400).json({ error: vErr });
     return;
   }
+  const mergedPrizeMode = body.prizeMode ?? existing.prizeMode;
   if (body.prizes !== undefined) {
-    const pErr = validatePrizes(body.prizes);
+    const mergedSeed =
+      body.prizePoolSeed !== undefined ? body.prizePoolSeed : existing.prizePoolSeed.toString();
+    const pErr = validatePrizes(body.prizes, mergedPrizeMode, mergedSeed);
     if (pErr) {
       res.status(400).json({ error: pErr });
+      return;
+    }
+  } else if (body.prizeMode === BingoPrizeMode.PERCENTAGE) {
+    const mergedSeed =
+      body.prizePoolSeed !== undefined ? body.prizePoolSeed : existing.prizePoolSeed.toString();
+    const seed = Number(toDecimalString(mergedSeed));
+    if (!Number.isFinite(seed) || seed < 0) {
+      res.status(400).json({ error: "prizePoolSeed must be a non-negative number when prize mode is PERCENTAGE" });
       return;
     }
   }
@@ -500,8 +617,16 @@ bingosRouter.put("/:id", async (req: AuthedRequest, res) => {
           repeatEveryMinutes:
             body.repeatEveryMinutes !== undefined ? body.repeatEveryMinutes ?? null : undefined,
           cardPrice: body.cardPrice !== undefined ? toDecimalString(body.cardPrice) : undefined,
+          prizeMode: body.prizeMode,
+          prizePoolSeed:
+            body.prizePoolSeed !== undefined
+              ? toDecimalString(body.prizePoolSeed)
+              : body.prizeMode === BingoPrizeMode.FIXED
+                ? "0"
+                : undefined,
           minPlayersToStart: body.minPlayersToStart,
           prizePayoutMode: body.prizePayoutMode,
+          drawMode: body.drawMode,
           updatedByUserId: userId ?? null,
         },
       });

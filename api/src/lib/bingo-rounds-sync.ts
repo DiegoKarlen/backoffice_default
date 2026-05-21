@@ -7,6 +7,12 @@ const SYNC_MAX_RUNS = 50_000;
 /** Cap horizonte cuando no hay endDateTime (1 año). */
 const DEFAULT_HORIZON_MS = 366 * 24 * 60 * 60 * 1000;
 
+/** Clave estable para `(bingoId, startsAt)` — evita desajustes de ms entre JS y Postgres. */
+export function roundStartsAtMs(d: Date | number): number {
+  const ms = typeof d === "number" ? d : d.getTime();
+  return Math.floor(ms / 1000) * 1000;
+}
+
 function computeSyncHorizonMs(endDateTime: Date | null, now: Date): number {
   const nowMs = now.getTime();
   const endMs = endDateTime?.getTime();
@@ -56,7 +62,7 @@ export async function syncScheduledRoundsForBingo(bingoId: string): Promise<void
     maxRuns: SYNC_MAX_RUNS,
   });
 
-  const targetMsList = [...new Set(runs.map((r) => r.startsAt.getTime()))].sort((a, b) => a - b);
+  const targetMsList = [...new Set(runs.map((r) => roundStartsAtMs(r.startsAt)))].sort((a, b) => a - b);
   const targetMs = new Set(targetMsList);
 
   const futureScheduled = await prisma.bingoRound.findMany({
@@ -68,7 +74,7 @@ export async function syncScheduledRoundsForBingo(bingoId: string): Promise<void
   });
 
   for (const r of futureScheduled) {
-    if (!targetMs.has(r.startsAt.getTime())) {
+    if (!targetMs.has(roundStartsAtMs(r.startsAt))) {
       await prisma.bingoRound.update({
         where: { id: r.id },
         data: {
@@ -81,18 +87,18 @@ export async function syncScheduledRoundsForBingo(bingoId: string): Promise<void
 
   if (targetMsList.length === 0) return;
 
-  // Prisma/PG prepared statements have a max bind vars limit; chunk the IN list.
-  const datesForQuery = targetMsList.map((ms) => new Date(ms));
-  const existingForTargets: typeof futureScheduled = [];
-  const CHUNK = 5000;
-  for (let i = 0; i < datesForQuery.length; i += CHUNK) {
-    const chunk = datesForQuery.slice(i, i + CHUNK);
-    const rows = await prisma.bingoRound.findMany({
-      where: { bingoId, startsAt: { in: chunk } },
-    });
-    existingForTargets.push(...rows);
+  const rangeStart = new Date(targetMsList[0]! - 1000);
+  const rangeEnd = new Date(targetMsList[targetMsList.length - 1]! + 1000);
+  const existingForTargets = await prisma.bingoRound.findMany({
+    where: {
+      bingoId,
+      startsAt: { gte: rangeStart, lte: rangeEnd },
+    },
+  });
+  const byMs = new Map<number, (typeof existingForTargets)[number]>();
+  for (const row of existingForTargets) {
+    byMs.set(roundStartsAtMs(row.startsAt), row);
   }
-  const byMs = new Map(existingForTargets.map((x) => [x.startsAt.getTime(), x]));
 
   const maxSeqAgg = await prisma.bingoRound.aggregate({
     where: { bingoId },
@@ -113,13 +119,34 @@ export async function syncScheduledRoundsForBingo(bingoId: string): Promise<void
     }
 
     nextSeq += 1;
-    await prisma.bingoRound.create({
-      data: {
-        bingoId,
-        sequence: nextSeq,
-        startsAt: new Date(ms),
-        status: BingoRoundStatus.SCHEDULED,
-      },
-    });
+    const startsAt = new Date(ms);
+    try {
+      await prisma.bingoRound.create({
+        data: {
+          bingoId,
+          sequence: nextSeq,
+          startsAt,
+          status: BingoRoundStatus.SCHEDULED,
+        },
+      });
+    } catch (e) {
+      const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: string }).code : "";
+      if (code === "P2002") {
+        const dup = await prisma.bingoRound.findFirst({
+          where: {
+            bingoId,
+            startsAt: { gte: new Date(ms), lt: new Date(ms + 1000) },
+          },
+        });
+        if (dup?.status === BingoRoundStatus.CANCELLED) {
+          await prisma.bingoRound.update({
+            where: { id: dup.id },
+            data: { status: BingoRoundStatus.SCHEDULED, cancellationReason: null },
+          });
+        }
+        continue;
+      }
+      throw e;
+    }
   }
 }

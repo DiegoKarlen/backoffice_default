@@ -78,19 +78,26 @@ let walletLedgerCache = null;
 /** @type {ReturnType<typeof attachBoPager> | null} */
 let walletPager = null;
 
+/** Fecha local `YYYY-MM-DD` para inputs type=date. */
+function walletLocalDateInputValue(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function resetWalletFilters() {
   const typeEl = /** @type {HTMLSelectElement | null} */ (document.getElementById("bo-wallet-filter-type"));
   if (typeEl) typeEl.value = "";
-  for (const id of [
-    "bo-wallet-filter-room",
-    "bo-wallet-filter-bingo",
-    "bo-wallet-filter-round",
-    "bo-wallet-filter-from",
-    "bo-wallet-filter-to",
-  ]) {
+  for (const id of ["bo-wallet-filter-room", "bo-wallet-filter-bingo", "bo-wallet-filter-round"]) {
     const el = /** @type {HTMLInputElement | null} */ (document.getElementById(id));
     if (el) el.value = "";
   }
+  const today = walletLocalDateInputValue();
+  const fromEl = /** @type {HTMLInputElement | null} */ (document.getElementById("bo-wallet-filter-from"));
+  const toEl = /** @type {HTMLInputElement | null} */ (document.getElementById("bo-wallet-filter-to"));
+  if (fromEl) fromEl.value = today;
+  if (toEl) toEl.value = today;
 }
 
 /**
@@ -130,7 +137,7 @@ function filterWalletLedgerRows(rows) {
   const bingoNeedle = bingoRaw.trim().toLowerCase();
   const roundNeedle = roundRaw.trim().toLowerCase();
 
-  return rows.filter((tx) => {
+  const filtered = rows.filter((tx) => {
     if (typeF && String(tx.type) !== typeF) return false;
     const d = /** @type {{ roomName?: string | null; bingoName?: string | null; roundSequence?: number | null }} */ (
       tx.detail || {}
@@ -145,6 +152,11 @@ function filterWalletLedgerRows(rows) {
     }
     if (roundNeedle && !matchesRoundSearch(d.roundSequence, roundNeedle)) return false;
     return true;
+  });
+  return filtered.sort((a, b) => {
+    const tb = Date.parse(String(b.createdAt ?? ""));
+    const ta = Date.parse(String(a.createdAt ?? ""));
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
   });
 }
 

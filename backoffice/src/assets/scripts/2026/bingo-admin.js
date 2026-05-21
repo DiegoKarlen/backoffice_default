@@ -86,94 +86,163 @@ function showBingosEditView() {
   if (edit) edit.hidden = false;
 }
 
-function buildPrizeRowHtml(p, figureOptions) {
-  const uniqueChecked = p.uniquePerRound !== false;
-  return `
-        <div class="bo-bingo-prize-row" data-bo-prize-row>
-          <div class="field field--underline">
-            <label class="field-label" data-i18n="bingo.prizeFigure"></label>
-            <select class="input input--underline" data-bo-prize-figure>
-              ${figureOptions
-                .map(
-                  (o) =>
-                    `<option value="${esc(o.v)}"${o.v === p.figure ? " selected" : ""}>${esc(o.l)}</option>`,
-                )
-                .join("")}
-            </select>
-          </div>
-          <div class="field field--underline">
-            <label class="field-label" data-i18n="bingo.prizeAmount"></label>
-            <input class="input input--underline" type="text" inputmode="decimal" value="${esc(p.amount ?? "")}" data-bo-prize-amount>
-          </div>
-          <label class="bo-bingo-prize-unique field-help">
-            <input type="checkbox" data-bo-prize-unique${uniqueChecked ? " checked" : ""} />
-            <span data-i18n="bingo.prizeUniquePerRound"></span>
-          </label>
-          <button type="button" class="btn btn--ghost btn--sm" data-bo-prize-remove>${esc(t("bingo.prizeRemove"))}</button>
-        </div>`;
+const BINGO_PRIZE_FIGURES = [
+  "LINE",
+  "DOUBLE_LINE",
+  "LETTER_B",
+  "LETTER_I",
+  "LETTER_N",
+  "LETTER_G",
+  "LETTER_O",
+  "PERIMETER",
+  "FULL_HOUSE",
+];
+
+const BINGO_PRIZE_DEFAULT_ENABLED = new Set(["LINE", "PERIMETER", "FULL_HOUSE"]);
+
+function prizeFigureLabel(fig) {
+  const key = `players.walletFigure.${fig}`;
+  const lbl = t(key);
+  return lbl === key ? String(fig) : lbl;
 }
 
-function renderPrizesEditor(host, prizes) {
-  if (!host) return;
-  const figureOptions = [
-    { v: "LINE", l: t("bingo.figureLine") },
-    { v: "PERIMETER", l: t("bingo.figurePerimeter") },
-    { v: "FULL_HOUSE", l: t("bingo.figureFullHouse") },
-  ];
+function defaultPrizeCatalog() {
+  return BINGO_PRIZE_FIGURES.map((figure) => ({
+    figure,
+    enabled: BINGO_PRIZE_DEFAULT_ENABLED.has(figure),
+    amount: "1",
+    uniquePerRound: true,
+  }));
+}
 
-  let rows = prizes || [];
-  if (!rows.length) rows = [{ figure: "LINE", amount: "1", uniquePerRound: true }];
-  host.innerHTML = `
-    <div class="field-help" style="margin-bottom:10px;">${esc(t("bingo.prizesHelp"))}</div>
-    <div data-bo-prize-list>
-      ${rows.map((p) => buildPrizeRowHtml(p, figureOptions)).join("")}
-    </div>
-    <button type="button" class="btn btn--ghost btn--sm" data-bo-prize-add>${esc(t("bingo.prizeAdd"))}</button>
-  `;
+function getPrizeModeForPrefix(prefix) {
+  const sel = document.getElementById(`${prefix}-prizeMode`);
+  return sel instanceof HTMLSelectElement && sel.value === "PERCENTAGE" ? "PERCENTAGE" : "FIXED";
+}
 
-  const list = host.querySelector("[data-bo-prize-list]");
+function syncBingoPrizeModeUi(prefix) {
+  const isPct = getPrizeModeForPrefix(prefix) === "PERCENTAGE";
+  const wrap = document.getElementById(`${prefix}-prize-pool-wrap`);
+  if (wrap) wrap.hidden = !isPct;
 
-  host.querySelectorAll("[data-bo-prize-remove]").forEach((btn) => {
-    btn.addEventListener("click", () => btn.closest("[data-bo-prize-row]")?.remove());
+  const valueLabel = isPct ? t("bingo.prizePercent") : t("bingo.prizeAmount");
+  const host = document.getElementById(`${prefix}-prizes`);
+  if (host) {
+    host.querySelectorAll("[data-bo-prize-value-label]").forEach((el) => {
+      el.textContent = valueLabel;
+    });
+  }
+}
+
+function wireBingoPrizeMode(prefix) {
+  const sel = document.getElementById(`${prefix}-prizeMode`);
+  if (!sel || sel.dataset.boPrizeModeWired === "1") return;
+  sel.dataset.boPrizeModeWired = "1";
+  sel.addEventListener("change", () => syncBingoPrizeModeUi(prefix));
+  syncBingoPrizeModeUi(prefix);
+}
+
+/**
+ * @param {Array<{ figure: string; amount?: string | number; uniquePerRound?: boolean }>} [prizes]
+ */
+function prizesForEditor(prizes) {
+  if (!prizes?.length) return defaultPrizeCatalog();
+  const byFig = new Map();
+  for (const p of prizes) {
+    if (p?.figure) byFig.set(p.figure, p);
+  }
+  return BINGO_PRIZE_FIGURES.map((figure) => {
+    const existing = byFig.get(figure);
+    if (existing) {
+      return {
+        figure,
+        enabled: true,
+        amount: String(existing.amount ?? "1"),
+        uniquePerRound: existing.uniquePerRound !== false,
+      };
+    }
+    return { figure, enabled: false, amount: "1", uniquePerRound: true };
   });
-  host.querySelector("[data-bo-prize-add]")?.addEventListener("click", () => {
-    if (!list) return;
-    list.insertAdjacentHTML(
-      "beforeend",
-      buildPrizeRowHtml({ figure: "LINE", amount: "1", uniquePerRound: true }, figureOptions),
-    );
-    applyDomI18n(host);
-    const newBtn = list.querySelector("[data-bo-prize-row]:last-child [data-bo-prize-remove]");
-    newBtn?.addEventListener("click", () => newBtn.closest("[data-bo-prize-row]")?.remove());
-  });
+}
 
+/**
+ * @param {{ figure: string; enabled?: boolean; amount?: string; uniquePerRound?: boolean }} item
+ * @param {string} prefix
+ */
+function buildPrizeItemHtml(item, prefix) {
+  const enabled = item.enabled !== false;
+  const uniqueChecked = item.uniquePerRound !== false;
+  const isPct = getPrizeModeForPrefix(prefix) === "PERCENTAGE";
+  const valueLabel = isPct ? t("bingo.prizePercent") : t("bingo.prizeAmount");
+  const cls = ["bo-bingo-prize-item"];
+  if (!enabled) cls.push("bo-bingo-prize-item--off");
+  const disabledAttr = enabled ? "" : " disabled";
+  return `<div class="${cls.join(" ")}" data-bo-prize-item data-figure="${esc(item.figure)}">
+  <div class="bo-bingo-prize-item__lead">
+    <label class="check bo-bingo-prize-item__toggle" title="${esc(t("bingo.prizeEnable"))}">
+      <input type="checkbox" data-bo-prize-enabled${enabled ? " checked" : ""} />
+      <span class="box"></span>
+    </label>
+    <span class="bo-bingo-prize-item__name">${esc(prizeFigureLabel(item.figure))}</span>
+  </div>
+  <div class="bo-bingo-prize-item__value-row">
+    <span class="bo-bingo-prize-item__value-label" data-bo-prize-value-label>${esc(valueLabel)}</span>
+    <input class="input input--underline bo-bingo-prize-item__value-input" type="text" inputmode="decimal" value="${esc(item.amount ?? "")}" data-bo-prize-amount${disabledAttr}>
+  </div>
+  <label class="check bo-bingo-prize-item__unique">
+    <input type="checkbox" data-bo-prize-unique${uniqueChecked && enabled ? " checked" : ""}${disabledAttr} />
+    <span class="box"></span>
+    <span data-i18n="bingo.prizeUniquePerRound"></span>
+  </label>
+</div>`;
+}
+
+function wirePrizeItemToggles(host) {
+  host.querySelectorAll("[data-bo-prize-enabled]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const row = cb.closest("[data-bo-prize-item]");
+      if (!(row instanceof HTMLElement)) return;
+      const on = /** @type {HTMLInputElement} */ (cb).checked;
+      row.classList.toggle("bo-bingo-prize-item--off", !on);
+      row.querySelectorAll("[data-bo-prize-amount], [data-bo-prize-unique]").forEach((el) => {
+        if (el instanceof HTMLInputElement) el.disabled = !on;
+      });
+    });
+  });
+}
+
+function renderPrizesEditor(host, prizes, prefix) {
+  if (!host || !prefix) return;
+  const items = prizesForEditor(prizes);
+  host.innerHTML = `<div class="bo-bingo-prize-list" data-bo-prize-list>${items.map((p) => buildPrizeItemHtml(p, prefix)).join("")}</div>`;
+  wirePrizeItemToggles(host);
   applyDomI18n(host);
+  syncBingoPrizeModeUi(prefix);
 }
 
-function collectPrizesFromHost(host) {
+function collectPrizesFromHost(host, prefix) {
   if (!host) return [];
-  const rows = [...host.querySelectorAll("[data-bo-prize-row]")];
   const prizes = [];
-  const seen = new Set();
+  const isPct = getPrizeModeForPrefix(prefix) === "PERCENTAGE";
 
-  for (const row of rows) {
-    const figRaw = row.querySelector("[data-bo-prize-figure]")?.value;
+  for (const row of host.querySelectorAll("[data-bo-prize-item]")) {
+    const enabled = row.querySelector("[data-bo-prize-enabled]");
+    if (!(enabled instanceof HTMLInputElement) || !enabled.checked) continue;
+
+    const fig = row.getAttribute("data-figure") ?? "";
     const amtRaw = row.querySelector("[data-bo-prize-amount]")?.value;
-    const fig = figRaw != null ? String(figRaw).trim() : "";
     const amt = amtRaw != null ? String(amtRaw).trim() : "";
-
-    if (!fig && !amt) continue;
-    if (!fig && amt) throw new Error(t("bingo.errPrizeFigureMissing"));
-    if (fig && !amt) throw new Error(t("bingo.errPrizeAmountMissing"));
-
-    if (seen.has(fig)) throw new Error(t("bingo.errPrizeDupFigure"));
-    seen.add(fig);
-
+    if (!amt) {
+      throw new Error(isPct ? t("bingo.errPrizePercentMissing") : t("bingo.errPrizeAmountMissing"));
+    }
     const n = parseMoneyAmount(amt);
-    if (!Number.isFinite(n) || n <= 0) throw new Error(t("bingo.errPrizeAmountInvalid"));
+    if (!Number.isFinite(n) || n <= 0) {
+      throw new Error(isPct ? t("bingo.errPrizePercentInvalid") : t("bingo.errPrizeAmountInvalid"));
+    }
+    if (isPct && n > 100) throw new Error(t("bingo.errPrizePercentInvalid"));
 
     const uniqueEl = row.querySelector("[data-bo-prize-unique]");
-    const uniquePerRound = uniqueEl ? uniqueEl.checked : true;
+    const uniquePerRound = uniqueEl instanceof HTMLInputElement ? uniqueEl.checked : true;
     prizes.push({ figure: fig, amount: amt, uniquePerRound });
   }
 
@@ -217,12 +286,27 @@ function collectPayload(prefix) {
   const defRadio = /** @type {HTMLInputElement | null} */ (document.getElementById(`${prefix}-prizePayoutMode-deferred`));
   const prizePayoutMode = defRadio?.checked ? "DEFERRED_SPLIT_AT_ROUND_END" : "IMMEDIATE_FULL_PER_WINNER";
 
+  const liveDrawRadio = /** @type {HTMLInputElement | null} */ (document.getElementById(`${prefix}-drawMode-live`));
+  const drawMode = liveDrawRadio?.checked ? "LIVE" : "VIRTUAL";
+
   const bingoType = document.getElementById(`${prefix}-bingoType`)?.value?.trim();
   if (!bingoType) throw new Error(t("bingo.errTypeRequired"));
 
   const active = !!document.getElementById(`${prefix}-active`)?.checked;
 
   const prizesHost = document.getElementById(`${prefix}-prizes`);
+  const prizes = collectPrizesFromHost(prizesHost, prefix);
+  const prizeMode = getPrizeModeForPrefix(prefix);
+
+  let prizePoolSeed = "0";
+  if (prizeMode === "PERCENTAGE") {
+    const poolRaw = document.getElementById(`${prefix}-prizePoolSeed`)?.value;
+    prizePoolSeed = String(poolRaw ?? "0").trim();
+    const poolNum = parseMoneyAmount(prizePoolSeed);
+    if (!Number.isFinite(poolNum) || poolNum < 0) {
+      throw new Error(t("bingo.errPrizePoolSeedInvalid"));
+    }
+  }
 
   return {
     roomId,
@@ -233,9 +317,12 @@ function collectPayload(prefix) {
     endDateTime: endIso,
     repeatEveryMinutes,
     cardPrice,
+    prizeMode,
+    prizePoolSeed,
     minPlayersToStart,
     prizePayoutMode,
-    prizes: collectPrizesFromHost(prizesHost),
+    drawMode,
+    prizes,
   };
 }
 
@@ -255,8 +342,17 @@ function resetCreateForm() {
   const createDefOff = /** @type {HTMLInputElement | null} */ (document.getElementById("create-prizePayoutMode-deferred"));
   if (createDef) createDef.checked = true;
   if (createDefOff) createDefOff.checked = false;
+  const createVirt = /** @type {HTMLInputElement | null} */ (document.getElementById("create-drawMode-virtual"));
+  const createLive = /** @type {HTMLInputElement | null} */ (document.getElementById("create-drawMode-live"));
+  if (createVirt) createVirt.checked = true;
+  if (createLive) createLive.checked = false;
   document.getElementById("create-active").checked = false;
-  renderPrizesEditor(document.getElementById("create-prizes"), []);
+  const createMode = document.getElementById("create-prizeMode");
+  if (createMode instanceof HTMLSelectElement) createMode.value = "FIXED";
+  const createPool = document.getElementById("create-prizePoolSeed");
+  if (createPool) createPool.value = "0";
+  wireBingoPrizeMode("create");
+  renderPrizesEditor(document.getElementById("create-prizes"), [], "create");
 }
 
 function fillEditForm(bingo) {
@@ -283,10 +379,28 @@ function fillEditForm(bingo) {
     imm.checked = ppm === "IMMEDIATE_FULL_PER_WINNER";
     def.checked = ppm === "DEFERRED_SPLIT_AT_ROUND_END";
   }
+  const dm = bingo.drawMode === "LIVE" ? "LIVE" : "VIRTUAL";
+  const editVirt = /** @type {HTMLInputElement | null} */ (document.getElementById("edit-drawMode-virtual"));
+  const editLive = /** @type {HTMLInputElement | null} */ (document.getElementById("edit-drawMode-live"));
+  if (editVirt && editLive) {
+    editVirt.checked = dm === "VIRTUAL";
+    editLive.checked = dm === "LIVE";
+  }
   document.getElementById("edit-active").checked = bingo.status === "ACTIVE";
+  const editMode = document.getElementById("edit-prizeMode");
+  const mode = bingo.prizeMode === "PERCENTAGE" ? "PERCENTAGE" : "FIXED";
+  if (editMode instanceof HTMLSelectElement) editMode.value = mode;
+  const editPool = document.getElementById("edit-prizePoolSeed");
+  if (editPool) editPool.value = String(bingo.prizePoolSeed ?? "0");
+  wireBingoPrizeMode("edit");
   renderPrizesEditor(
     document.getElementById("edit-prizes"),
-    (bingo.prizes || []).map((p) => ({ figure: p.figure, amount: p.amount, uniquePerRound: p.uniquePerRound !== false })),
+    (bingo.prizes || []).map((p) => ({
+      figure: p.figure,
+      amount: p.amount,
+      uniquePerRound: p.uniquePerRound !== false,
+    })),
+    "edit",
   );
 }
 
@@ -328,16 +442,25 @@ function cancellationReasonLabel(code) {
   return key ? t(key) : String(code);
 }
 
-/** Sin filtros de fecha/partida: últimas N partidas terminadas (finalizadas o canceladas), más recientes primero. */
+/** Sin filtros personalizados: últimas N partidas finalizadas, más recientes primero. */
 const ROUNDS_DEFAULT_FINISHED_LIMIT = 500;
+const ROUNDS_FILTER_STATUS_DEFAULT = "COMPLETED";
+
+function getRoundsFilterStatusValue() {
+  const el = /** @type {HTMLSelectElement | null} */ (document.getElementById("bo-rounds-filter-status"));
+  const v = el?.value?.trim();
+  return v || ROUNDS_FILTER_STATUS_DEFAULT;
+}
 
 function clearRoundsFilters() {
   const fromEl = document.getElementById("bo-rounds-filter-from");
   const toEl = document.getElementById("bo-rounds-filter-to");
   const seqEl = document.getElementById("bo-rounds-filter-sequence");
+  const statusEl = /** @type {HTMLSelectElement | null} */ (document.getElementById("bo-rounds-filter-status"));
   if (fromEl) fromEl.value = "";
   if (toEl) toEl.value = "";
   if (seqEl) seqEl.value = "";
+  if (statusEl) statusEl.value = ROUNDS_FILTER_STATUS_DEFAULT;
 }
 
 function hasActiveRoundFilters() {
@@ -345,27 +468,51 @@ function hasActiveRoundFilters() {
   const toIso = datetimeLocalToIso(document.getElementById("bo-rounds-filter-to")?.value);
   const seqRaw = document.getElementById("bo-rounds-filter-sequence")?.value;
   const seqTrim = seqRaw != null ? String(seqRaw).trim() : "";
-  return !!(fromIso || toIso || seqTrim !== "");
+  const status = getRoundsFilterStatusValue();
+  return !!(fromIso || toIso || seqTrim !== "" || status !== ROUNDS_FILTER_STATUS_DEFAULT);
+}
+
+/**
+ * @param {string} statusFilter
+ */
+function appendRoundsStatusToQuery(query, statusFilter) {
+  if (statusFilter !== "ALL") {
+    query.status = statusFilter;
+  }
 }
 
 function getRoundsFilterQuery() {
+  const statusFilter = getRoundsFilterStatusValue();
+  /** @type {{ from?: string; to?: string; sequence?: string; status?: string; limit: string; sort: string }} */
+  const query = {
+    limit: String(ROUNDS_DEFAULT_FINISHED_LIMIT),
+    sort: "desc",
+  };
   if (!hasActiveRoundFilters()) {
-    return {
-      finishedOnly: "true",
-      limit: String(ROUNDS_DEFAULT_FINISHED_LIMIT),
-      sort: "desc",
-    };
+    query.status = ROUNDS_FILTER_STATUS_DEFAULT;
+    return query;
   }
   const fromIso = datetimeLocalToIso(document.getElementById("bo-rounds-filter-from")?.value);
   const toIso = datetimeLocalToIso(document.getElementById("bo-rounds-filter-to")?.value);
   const seqRaw = document.getElementById("bo-rounds-filter-sequence")?.value;
   const seqTrim = seqRaw != null ? String(seqRaw).trim() : "";
-  /** @type {{ from?: string; to?: string; sequence?: string }} */
-  const query = {};
   if (fromIso) query.from = fromIso;
   if (toIso) query.to = toIso;
   if (seqTrim !== "") query.sequence = seqTrim;
+  appendRoundsStatusToQuery(query, statusFilter);
   return query;
+}
+
+/**
+ * @param {Array<Record<string, unknown>>} rounds
+ */
+function sortRoundsNewestFirst(rounds) {
+  return [...rounds].sort((a, b) => {
+    const ta = new Date(/** @type {string} */ (a.startsAt)).getTime();
+    const tb = new Date(/** @type {string} */ (b.startsAt)).getTime();
+    if (tb !== ta) return tb - ta;
+    return Number(b.sequence) - Number(a.sequence);
+  });
 }
 
 /** @type {Array<Record<string, unknown>>} */
@@ -373,53 +520,226 @@ let roundsListCache = [];
 /** @type {ReturnType<typeof attachBoPager> | null} */
 let roundsPager = null;
 
-function renderRoundsTableHtml(rounds) {
+function moneyLocaleTag() {
+  const lang = document.documentElement.lang || "es";
+  return lang.startsWith("es") ? "es-AR" : lang;
+}
+
+function formatArsFromCents(cents) {
+  const n = Number(cents);
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat(moneyLocaleTag(), {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n / 100);
+}
+
+function roundFigureLabel(fig) {
+  const key = `players.walletFigure.${fig}`;
+  const lbl = t(key);
+  return lbl === key ? String(fig) : lbl;
+}
+
+const BINGO75_COLS = ["B", "I", "N", "G", "O"];
+
+/**
+ * @param {unknown[][]} grid
+ * @param {string} cardLabel
+ * @param {Array<{ figure: string; amountCents: number; highlight?: { row: number; col: number }[] }>} [prizes]
+ */
+function renderBingo75CardTileHtml(grid, cardLabel, prizes = []) {
+  const hlSet = new Set();
+  for (const p of prizes) {
+    for (const h of p.highlight ?? []) hlSet.add(`${h.row},${h.col}`);
+  }
+  const tileCls = ["bo-round-detail-card-tile"];
+  if (prizes.length) tileCls.push("bo-round-detail-card-tile--won");
+
+  const prizeTags = prizes
+    .map(
+      (p) =>
+        `<span class="bo-round-detail-card-prize-tag">${esc(roundFigureLabel(p.figure))} · ${esc(formatArsFromCents(p.amountCents))}</span>`,
+    )
+    .join("");
+
+  const headInner = prizeTags
+    ? `<div class="bo-round-detail-card-tile__head-row"><span class="bo-round-detail-card-tile__label">${esc(cardLabel)}</span><div class="bo-round-detail-card-tile__prizes">${prizeTags}</div></div>`
+    : esc(cardLabel);
+
+  let html = `<article class="${tileCls.join(" ")}">
+    <header class="bo-round-detail-card-tile__head">${headInner}</header>
+    <div class="bo-bingo-card-grid bo-bingo-card-grid--labeled" role="grid" aria-label="${esc(cardLabel)}">`;
+  for (const letter of BINGO75_COLS) {
+    html += `<div class="bo-bingo-colhead" role="columnheader">${esc(letter)}</div>`;
+  }
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 5; c++) {
+      const cell = /** @type {{ number?: number | null; isFree?: boolean }} */ (grid[r]?.[c] ?? {});
+      const cls = ["bo-bingo-cell"];
+      if (cell.isFree) cls.push("bo-bingo-cell--free");
+      if (hlSet.has(`${r},${c}`)) cls.push("bo-bingo-cell--figure");
+      const inner = cell.isFree ? "★" : cell.number != null ? String(cell.number) : "";
+      html += `<div class="${cls.join(" ")}" role="gridcell">${esc(inner)}</div>`;
+    }
+  }
+  html += "</div></article>";
+  return html;
+}
+
+/** @typedef {{ playerUsername: string; cardIndex: number; grid: unknown[][]; prizes?: Array<{ figure: string; amountCents: number; highlight?: { row: number; col: number }[] }> }} RoundPurchasedCard */
+
+/** @type {{ cards: RoundPurchasedCard[]; sequence: number | string } | null} */
+let roundCardsDetailCache = null;
+
+/**
+ * @param {RoundPurchasedCard[]} cards
+ */
+function groupRoundCardsByPlayer(cards) {
+  /** @type {Map<string, RoundPurchasedCard[]>} */
+  const byPlayer = new Map();
+  for (const c of cards) {
+    const key = c.playerUsername || "—";
+    const list = byPlayer.get(key) ?? [];
+    list.push(c);
+    byPlayer.set(key, list);
+  }
+  return [...byPlayer.entries()].sort(([a], [b]) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+/**
+ * @param {RoundPurchasedCard[]} cards
+ */
+function renderRoundPurchasedCardsSummaryHtml(cards) {
+  const rows = groupRoundCardsByPlayer(cards)
+    .map(
+      ([username, playerCards]) => `<tr>
+      <td>${esc(username)}</td>
+      <td class="mono">${esc(String(playerCards.length))}</td>
+      <td class="bo-round-detail-cards-actions">
+        <button type="button" class="btn btn--ghost btn--sm bo-round-cards-view-player" data-player="${esc(encodeURIComponent(username))}">${esc(t("bingo.roundDetailViewPlayerCards"))}</button>
+      </td>
+    </tr>`,
+    )
+    .join("");
+
+  return `<p class="bo-round-detail-cards-summary field-help">${esc(
+    t("bingo.roundDetailCardsSummary", { count: String(cards.length) }),
+  )}</p>
+  <div class="bo-round-detail-table-wrap">
+    <table class="table table--compact bo-round-detail-cards-table">
+      <thead><tr>
+        <th>${esc(t("bingo.roundDetailPlayer"))}</th>
+        <th>${esc(t("bingo.roundDetailCardsCount"))}</th>
+        <th>${esc(t("bingo.roundDetailActions"))}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+/**
+ * @param {string} username
+ * @param {RoundPurchasedCard[]} cards
+ */
+function renderRoundPurchasedCardsPlayerHtml(username, cards) {
+  const sorted = [...cards].sort((a, b) => a.cardIndex - b.cardIndex);
+  let tiles = "";
+  for (const c of sorted) {
+    const label = `${t("bingo.roundDetailCardLabel")} #${c.cardIndex + 1}`;
+    tiles += renderBingo75CardTileHtml(c.grid, label, c.prizes ?? []);
+  }
+  return `<div class="bo-round-detail-cards-player">
+    <button type="button" class="btn btn--ghost btn--sm bo-round-cards-back">${esc(t("bingo.roundDetailBackToList"))}</button>
+    <div class="bo-round-detail-player__cards">${tiles}</div>
+  </div>`;
+}
+
+function showRoundCardsSummaryView() {
+  const dlg = /** @type {HTMLDialogElement | null} */ (document.getElementById("bo-round-detail-dialog"));
+  const titleEl = document.getElementById("bo-round-detail-dialog-title");
+  const body = document.getElementById("bo-round-detail-dialog-body");
+  if (!dlg || !titleEl || !body || !roundCardsDetailCache) return;
+  dlg.classList.remove("bo-round-detail-dialog--cards-player");
+  titleEl.textContent = tSeq("bingo.roundDetailCardsTitle", roundCardsDetailCache.sequence);
+  body.innerHTML = renderRoundPurchasedCardsSummaryHtml(roundCardsDetailCache.cards);
+}
+
+/**
+ * @param {string} username
+ */
+function showRoundCardsPlayerView(username) {
+  const dlg = /** @type {HTMLDialogElement | null} */ (document.getElementById("bo-round-detail-dialog"));
+  const titleEl = document.getElementById("bo-round-detail-dialog-title");
+  const body = document.getElementById("bo-round-detail-dialog-body");
+  if (!dlg || !titleEl || !body || !roundCardsDetailCache) return;
+
+  const playerCards = roundCardsDetailCache.cards.filter((c) => (c.playerUsername || "—") === username);
+  if (!playerCards.length) return;
+
+  dlg.classList.add("bo-round-detail-dialog--cards-player");
+  titleEl.textContent = t("bingo.roundDetailCardsPlayerTitle", {
+    user: username,
+    seq:
+      roundCardsDetailCache.sequence != null && roundCardsDetailCache.sequence !== "—"
+        ? String(roundCardsDetailCache.sequence)
+        : "—",
+  });
+  body.innerHTML = renderRoundPurchasedCardsPlayerHtml(username, playerCards);
+}
+
+function renderRoundsListHtml(rounds) {
   if (!rounds.length) {
     return `<p class="bo-rounds-empty">${esc(t("bingo.roundsEmpty"))}</p>`;
   }
-  return `
-    <div class="bo-rounds-table-wrap" id="bo-rounds-table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>${esc(t("bingo.roundsColSeq"))}</th>
-            <th>${esc(t("bingo.roundsColStart"))}</th>
-            <th>${esc(t("bingo.roundsColStatus"))}</th>
-            <th>${esc(t("bingo.roundsColReason"))}</th>
-            <th>${esc(t("bingo.roundsColBalls"))}</th>
-          </tr>
-        </thead>
-        <tbody id="bo-rounds-tbody"></tbody>
-      </table>
-    </div>`;
+  return `<div class="bo-rounds-list" id="bo-rounds-list">${rounds.map((r) => renderRoundCardHtml(r)).join("")}</div>`;
 }
 
 /**
  * @param {Record<string, unknown>} r
  */
-function renderRoundRowHtml(r) {
+function renderRoundCardHtml(r) {
   const tagClass = ROUND_STATUS_TAG[/** @type {string} */ (r.status)] ?? "t-old";
   const seq = r.sequence;
   const partidaLabel = seq != null && Number.isFinite(Number(seq)) ? String(Number(seq)) : "—";
-  const reasonCell =
+  const roundId = String(r.id ?? "");
+  const cardsSold = Number(r.cardsSold ?? 0);
+  const prizesPaid = Number(r.prizesPaid ?? 0);
+  const reasonBlock =
     r.status === "CANCELLED"
-      ? `<span class="bo-rounds-reason">${esc(cancellationReasonLabel(/** @type {string | null | undefined} */ (r.cancellationReason)))}</span>`
-      : `<span class="bo-rounds-reason bo-rounds-reason--na">${esc("—")}</span>`;
-  return `
-              <tr>
-                <td class="mono bo-rounds-cell-partida">${esc(partidaLabel)}</td>
-                <td class="cell-date">${esc(new Date(/** @type {string} */ (r.startsAt)).toLocaleString())}</td>
-                <td><span class="tag ${tagClass}">${esc(roundStatusLabel(/** @type {string} */ (r.status)))}</span></td>
-                <td class="bo-rounds-cell-reason">${reasonCell}</td>
-                <td style="min-width:200px;">${renderRoundBallsCell(r)}</td>
-              </tr>`;
+      ? `<p class="bo-round-card__reason">${esc(cancellationReasonLabel(/** @type {string | null | undefined} */ (r.cancellationReason)))}</p>`
+      : "";
+
+  return `<article class="bo-round-card" data-round-id="${esc(roundId)}">
+  <header class="bo-round-card__head">
+    <div class="bo-round-card__meta">
+      <span class="bo-round-card__seq mono">#${esc(partidaLabel)}</span>
+      <span class="tag ${tagClass}">${esc(roundStatusLabel(/** @type {string} */ (r.status)))}</span>
+      <span class="bo-round-card__date cell-date">${esc(new Date(/** @type {string} */ (r.startsAt)).toLocaleString())}</span>
+    </div>
+    <div class="bo-round-card__stats mono">
+      <span>${esc(t("bingo.roundsCardsSold"))}: <strong>${esc(String(cardsSold))}</strong></span>
+      <span>${esc(t("bingo.roundsPrizesPaid"))}: <strong>${esc(String(prizesPaid))}</strong></span>
+    </div>
+  </header>
+  ${reasonBlock}
+  <div class="bo-round-card__actions">
+    <button type="button" class="btn btn--ghost btn--sm bo-round-view-cards" data-round-id="${esc(roundId)}" data-round-seq="${esc(partidaLabel)}">${esc(t("bingo.roundsViewCards"))}</button>
+    <button type="button" class="btn btn--ghost btn--sm bo-round-view-prizes" data-round-id="${esc(roundId)}" data-round-seq="${esc(partidaLabel)}">${esc(t("bingo.roundsViewPrizes"))}</button>
+  </div>
+  <section class="bo-round-card__balls-section" aria-label="${esc(t("bingo.roundsColBalls"))}">
+    <h4 class="bo-round-card__balls-title">${esc(t("bingo.roundsColBalls"))}</h4>
+    ${renderRoundBallsCell(r)}
+  </section>
+</article>`;
 }
 
 /**
  * @param {Array<Record<string, unknown>>} rounds
  */
 function renderRoundRowsHtml(rounds) {
-  return rounds.map((r) => renderRoundRowHtml(r)).join("");
+  return rounds.map((r) => renderRoundCardHtml(r)).join("");
 }
 
 function renderRoundBallsCell(r) {
@@ -452,23 +772,23 @@ async function loadRoundsTable() {
 
   try {
     const data = await api.bingos.rounds(bingoId, getRoundsFilterQuery());
-    const rounds = data.rounds || [];
+    const rounds = sortRoundsNewestFirst(data.rounds || []);
     roundsListCache = rounds;
-    content.innerHTML = renderRoundsTableHtml(rounds);
+    content.innerHTML = renderRoundsListHtml(rounds);
     if (!rounds.length) {
       roundsPager = null;
       return;
     }
-    const anchor = document.getElementById("bo-rounds-table-wrap");
+    const anchor = document.getElementById("bo-rounds-list");
     if (!anchor) return;
     roundsPager = attachBoPager({
       anchor,
       getItems: () => roundsListCache,
       renderPage: (slice) => {
-        const tb = document.getElementById("bo-rounds-tbody");
-        if (tb) tb.innerHTML = renderRoundRowsHtml(/** @type {typeof roundsListCache} */ (slice));
+        const list = document.getElementById("bo-rounds-list");
+        if (list) list.innerHTML = renderRoundRowsHtml(/** @type {typeof roundsListCache} */ (slice));
       },
-      pageSize: 10,
+      pageSize: 8,
     });
     roundsPager.refresh();
   } catch (e) {
@@ -492,6 +812,90 @@ async function openBingoRoundsModal(bingoId, bingoName) {
   await loadRoundsTable();
 }
 
+function tSeq(key, seq) {
+  const label =
+    seq != null && seq !== "—" && Number.isFinite(Number(seq)) ? String(Number(seq)) : "—";
+  return t(key, { seq: label });
+}
+
+async function openRoundCardsDetail(bingoId, roundId, sequence) {
+  const dlg = /** @type {HTMLDialogElement | null} */ (document.getElementById("bo-round-detail-dialog"));
+  const titleEl = document.getElementById("bo-round-detail-dialog-title");
+  const body = document.getElementById("bo-round-detail-dialog-body");
+  if (!dlg || !titleEl || !body) return;
+
+  dlg.classList.add("bo-round-detail-dialog--cards");
+  dlg.classList.remove("bo-round-detail-dialog--prizes");
+  titleEl.textContent = tSeq("bingo.roundDetailCardsTitle", sequence);
+  body.innerHTML = `<p class="field-help">${esc(t("bingo.roundDetailLoading"))}</p>`;
+  dlg.showModal();
+  applyDomI18n(dlg);
+
+  try {
+    const data = /** @type {{ cards?: RoundPurchasedCard[]; roundStatus?: string }} */ (
+      await api.bingos.roundCards(bingoId, roundId)
+    );
+    const cards = Array.isArray(data.cards) ? data.cards : [];
+    if (!cards.length) {
+      roundCardsDetailCache = null;
+      body.innerHTML = `<p class="field-help">${esc(t("bingo.roundDetailCardsEmpty"))}</p>`;
+      return;
+    }
+    roundCardsDetailCache = { cards, sequence };
+    dlg.classList.remove("bo-round-detail-dialog--cards-player");
+    body.innerHTML = renderRoundPurchasedCardsSummaryHtml(cards);
+  } catch (e) {
+    roundCardsDetailCache = null;
+    body.innerHTML = `<p class="field-help" style="color:var(--danger,#c0392b);">${esc(e instanceof Error ? e.message : String(e))}</p>`;
+  }
+}
+
+async function openRoundPrizesDetail(bingoId, roundId, sequence) {
+  const dlg = /** @type {HTMLDialogElement | null} */ (document.getElementById("bo-round-detail-dialog"));
+  const titleEl = document.getElementById("bo-round-detail-dialog-title");
+  const body = document.getElementById("bo-round-detail-dialog-body");
+  if (!dlg || !titleEl || !body) return;
+
+  dlg.classList.remove("bo-round-detail-dialog--cards");
+  dlg.classList.add("bo-round-detail-dialog--prizes");
+  titleEl.textContent = tSeq("bingo.roundDetailPrizesTitle", sequence);
+  body.innerHTML = `<p class="field-help">${esc(t("bingo.roundDetailLoading"))}</p>`;
+  dlg.showModal();
+  applyDomI18n(dlg);
+
+  try {
+    const data = /** @type {{ prizes?: { playerUsername: string; figure: string; amountCents: number; cardIndex: number }[] }} */ (
+      await api.bingos.roundPrizes(bingoId, roundId)
+    );
+    const prizes = Array.isArray(data.prizes) ? data.prizes : [];
+    if (!prizes.length) {
+      body.innerHTML = `<p class="field-help">${esc(t("bingo.roundDetailPrizesEmpty"))}</p>`;
+      return;
+    }
+    const rows = prizes
+      .map(
+        (p) => `<tr>
+      <td>${esc(p.playerUsername)}</td>
+      <td class="mono">#${esc(String(p.cardIndex + 1))}</td>
+      <td>${esc(roundFigureLabel(p.figure))}</td>
+      <td class="mono">${esc(formatArsFromCents(p.amountCents))}</td>
+    </tr>`,
+      )
+      .join("");
+    body.innerHTML = `<div class="bo-round-detail-table-wrap"><table class="table table--compact">
+      <thead><tr>
+        <th>${esc(t("bingo.roundDetailPlayer"))}</th>
+        <th>${esc(t("bingo.roundDetailCardLabel"))}</th>
+        <th>${esc(t("bingo.roundDetailFigure"))}</th>
+        <th>${esc(t("bingo.roundDetailAmount"))}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  } catch (e) {
+    body.innerHTML = `<p class="field-help" style="color:var(--danger,#c0392b);">${esc(e instanceof Error ? e.message : String(e))}</p>`;
+  }
+}
+
 function wireBingoRoundsDialog() {
   const dlg = document.getElementById("bo-bingo-rounds-dialog");
   if (!dlg || dlg.dataset.boWired) return;
@@ -507,6 +911,56 @@ function wireBingoRoundsDialog() {
   document.getElementById("bo-rounds-filter-clear")?.addEventListener("click", async () => {
     clearRoundsFilters();
     await loadRoundsTable();
+  });
+
+  const content = document.getElementById("bo-bingo-rounds-content");
+  content?.addEventListener("click", (ev) => {
+    const el = ev.target;
+    if (!(el instanceof Element)) return;
+    const cardsBtn = el.closest(".bo-round-view-cards");
+    const prizesBtn = el.closest(".bo-round-view-prizes");
+    const bingoId = dlg.dataset.bingoId;
+    if (!bingoId) return;
+    const btn = cardsBtn ?? prizesBtn;
+    const roundId = btn?.getAttribute("data-round-id");
+    if (!roundId) return;
+    const seqFromBtn = btn.getAttribute("data-round-seq");
+    const round = roundsListCache.find((r) => String(r.id) === roundId);
+    const seq =
+      seqFromBtn && seqFromBtn !== "—"
+        ? seqFromBtn
+        : round?.sequence != null && Number.isFinite(Number(round.sequence))
+          ? Number(round.sequence)
+          : "—";
+    if (cardsBtn) void openRoundCardsDetail(bingoId, roundId, seq);
+    else if (prizesBtn) void openRoundPrizesDetail(bingoId, roundId, seq);
+  });
+
+  const detailDlg = document.getElementById("bo-round-detail-dialog");
+  const detailBody = document.getElementById("bo-round-detail-dialog-body");
+  document.getElementById("bo-round-detail-dialog-close")?.addEventListener("click", () => {
+    /** @type {HTMLDialogElement | null} */ (detailDlg)?.close();
+  });
+  detailDlg?.addEventListener("cancel", (e) => {
+    e.preventDefault();
+    /** @type {HTMLDialogElement | null} */ (detailDlg)?.close();
+  });
+  detailDlg?.addEventListener("close", () => {
+    roundCardsDetailCache = null;
+    /** @type {HTMLDialogElement | null} */ (detailDlg)?.classList.remove(
+      "bo-round-detail-dialog--cards-player",
+    );
+  });
+  detailBody?.addEventListener("click", (ev) => {
+    const el = ev.target;
+    if (!(el instanceof Element)) return;
+    const viewBtn = el.closest(".bo-round-cards-view-player");
+    if (viewBtn) {
+      const raw = viewBtn.getAttribute("data-player");
+      if (raw) showRoundCardsPlayerView(decodeURIComponent(raw));
+      return;
+    }
+    if (el.closest(".bo-round-cards-back")) showRoundCardsSummaryView();
   });
 }
 
@@ -688,7 +1142,7 @@ export async function initBingosPage() {
     showToast(msg, e.message, true);
   }
 
-  renderPrizesEditor(document.getElementById("create-prizes"), []);
+  renderPrizesEditor(document.getElementById("create-prizes"), [], "create");
 
   try {
     await renderBingosTable(tbody);

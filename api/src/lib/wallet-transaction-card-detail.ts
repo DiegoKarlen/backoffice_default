@@ -1,7 +1,6 @@
 import type { BingoFigure, BingoType } from "@prisma/client";
 import {
-  buildMarkedGrid,
-  figureHighlightSlots,
+  figureHighlightSlotsByDrawOrder,
   type Bingo75Cell,
 } from "../game-engine/bingo/bingo-75/figures.js";
 import { prisma } from "./prisma.js";
@@ -151,7 +150,6 @@ export async function getWalletTransactionCardDetail(params: {
       select: { number: true },
     });
     const drawnNumbers = balls.map((b) => b.number);
-    const drawn = new Set(drawnNumbers);
 
     const cells: Bingo75Cell[] = payout.playerRoundCard.cells.map((c) => ({
       row: c.row,
@@ -159,9 +157,8 @@ export async function getWalletTransactionCardDetail(params: {
       number: c.number,
       isFree: c.isFree,
     }));
-    const marked = buildMarkedGrid(cells, drawn);
     const figure = payout.bingoPrize.figure;
-    const highlight = figureHighlightSlots(figure, marked);
+    const highlight = figureHighlightSlotsByDrawOrder(figure, cells, drawnNumbers);
 
     return {
       ok: true,

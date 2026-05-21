@@ -1,16 +1,27 @@
 import { publicBingosPath } from "./config.js";
 
-export type BingoFigure = "LINE" | "PERIMETER" | "FULL_HOUSE";
+export type BingoFigure =
+  | "LINE"
+  | "DOUBLE_LINE"
+  | "LETTER_B"
+  | "LETTER_I"
+  | "LETTER_N"
+  | "LETTER_G"
+  | "LETTER_O"
+  | "PERIMETER"
+  | "FULL_HOUSE";
 
 export type OccurrencePrize = {
   figure: BingoFigure;
   amount: string;
+  displayAmount?: string;
 };
 
 export type Occurrence = {
   bingoId: string;
   name: string;
   bingoType: string;
+  prizeMode?: string;
   cardPrice: string;
   startsAt: string;
   startsAtMs: number;
@@ -35,6 +46,7 @@ export type LiveSnapshot = {
   roomTitle: string;
   nextScheduledAt: string | null;
   nextName: string | null;
+  nextRoundSequence: number | null;
   current: null | {
     bingoId: string;
     roundId: string;
@@ -48,9 +60,26 @@ export type LiveSnapshot = {
     totalBalls: number;
     progress: number;
     scheduledStartsAt: string;
+    drawMode: "VIRTUAL" | "LIVE";
+    /** false tras cartón lleno / fin de partida (Live). */
+    canMarkLiveBall?: boolean;
     prizes: OccurrencePrize[];
   };
 };
+
+/** Bingo Live: marca bola sorteada (público, sin auth por ahora). */
+export async function postDrawBall(number: number): Promise<void> {
+  const url = publicBingosPath("/live/draw-ball");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ number }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `Draw ball: ${res.status}`);
+  }
+}
 
 export type PublicRoom = {
   id: string;

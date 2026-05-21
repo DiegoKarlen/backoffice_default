@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { decimalPriceToCents } from "../lib/money.js";
+import { computePrizePayoutCents, computeRoundPrizePoolCents } from "../lib/bingo-prize-pool.js";
 
 export type PrizeCreditResult = {
   payoutId: string;
@@ -93,11 +93,20 @@ export async function creditPrizeToWinner(params: {
 }): Promise<PrizeCreditResult> {
   const prize = await prisma.bingoPrize.findUnique({
     where: { id: params.bingoPrizeId },
+    include: { bingo: { select: { prizeMode: true } } },
   });
   if (!prize) throw new Error("Prize not found");
 
-  const amountCents =
-    params.amountCentsOverride ?? decimalPriceToCents(prize.amount);
+  let amountCents = params.amountCentsOverride;
+  if (amountCents == null) {
+    const card = await prisma.playerRoundCard.findUnique({
+      where: { id: params.playerRoundCardId },
+      select: { bingoRoundId: true },
+    });
+    if (!card) throw new Error("Player round card not found");
+    const roundPoolCents = await computeRoundPrizePoolCents(card.bingoRoundId);
+    amountCents = computePrizePayoutCents(prize.bingo.prizeMode, prize, roundPoolCents);
+  }
 
   return prisma.$transaction((tx) =>
     creditPrizeAmountWithTx(tx, {

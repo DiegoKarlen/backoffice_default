@@ -91,168 +91,266 @@
         </section>
 
         <!-- Crear bingo -->
-        <section class="card" id="bo-bingo-create-panel" hidden style="margin-bottom:18px;">
-          <div class="card-head">
+        <section class="col-12 bo-bingo-page" id="bo-bingo-create-panel" hidden>
+          <header class="bo-bingo-page__head">
             <div class="card-title-wrap">
               <span class="eyebrow" data-i18n="bingoExtra.breadcrumbAdminBingos"></span>
-              <h2 class="card-title" data-i18n="bingoExtra.createTitle"></h2>
+              <h1 class="card-title" data-i18n="bingoExtra.createTitle"></h1>
             </div>
-          </div>
+          </header>
 
-          <form id="bo-bingo-create-form" class="bo-form-profile">
-            <div class="bo-form-profile__grid">
-              <div class="field field--underline">
-                <label class="field-label" for="create-roomId" data-i18n="bingo.labelRoom"></label>
-                <select id="create-roomId" class="input input--underline" required></select>
+          <form id="bo-bingo-create-form" class="bo-form-profile bo-bingo-form">
+            <div class="bo-bingo-form__col bo-bingo-form__col--left">
+            <article class="card bo-bingo-form__section bo-bingo-form__section--general" aria-labelledby="create-section-general-title">
+              <div class="card-head">
+                <h2 class="card-title" id="create-section-general-title" data-i18n="bingo.sectionGeneral"></h2>
               </div>
-              <div class="field field--underline">
-                <label class="field-label" for="create-name" data-i18n="bingo.labelName"></label>
-                <input id="create-name" class="input input--underline" type="text" required autocomplete="off">
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="create-bingoType" data-i18n="bingo.labelBingoType"></label>
-                <select id="create-bingoType" class="input input--underline" required>
-                  <option value="BINGO_75" data-i18n="bingo.type75"></option>
-                  <option value="BINGO_90" data-i18n="bingo.type90"></option>
-                </select>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="create-start" data-i18n="bingo.labelStart"></label>
-                <input id="create-start" class="input input--underline" type="datetime-local" required>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="create-end" data-i18n="bingo.labelEnd"></label>
-                <input id="create-end" class="input input--underline" type="datetime-local" required>
-                <p class="field-help" data-i18n="bingo.helpEnd"></p>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="create-repeatEveryMinutes" data-i18n="bingo.labelRepeatEvery"></label>
-                <input id="create-repeatEveryMinutes" class="input input--underline" type="number" min="1" max="10080" placeholder="30" required>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="create-cardPrice" data-i18n="bingo.labelCardPrice"></label>
-                <input id="create-cardPrice" class="input input--underline" type="text" inputmode="decimal" required value="1">
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="create-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
-                <input id="create-minPlayersToStart" class="input input--underline" type="number" min="1" max="100000" value="2" required>
-              </div>
-              <div class="field bo-form-profile__full">
-                <span class="field-label" data-i18n="bingo.labelPrizePayoutMode"></span>
-                <p class="field-help" style="margin-bottom:8px;" data-i18n="bingo.helpPrizePayoutMode"></p>
-                <div class="field-group bo-radio-stack">
+              <div class="bo-bingo-form__section-content bo-form-profile__grid">
+                <div class="field field--underline">
+                  <label class="field-label" for="create-roomId" data-i18n="bingo.labelRoom"></label>
+                  <select id="create-roomId" class="input input--underline" required></select>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="create-name" data-i18n="bingo.labelName"></label>
+                  <input id="create-name" class="input input--underline" type="text" required autocomplete="off">
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="create-bingoType" data-i18n="bingo.labelBingoType"></label>
+                  <select id="create-bingoType" class="input input--underline" required>
+                    <option value="BINGO_75" data-i18n="bingo.type75"></option>
+                    <option value="BINGO_90" data-i18n="bingo.type90"></option>
+                  </select>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="create-start" data-i18n="bingo.labelStart"></label>
+                  <input id="create-start" class="input input--underline" type="datetime-local" required>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="create-end" data-i18n="bingo.labelEnd"></label>
+                  <input id="create-end" class="input input--underline" type="datetime-local" required>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="create-repeatEveryMinutes" data-i18n="bingo.labelRepeatEvery"></label>
+                  <input id="create-repeatEveryMinutes" class="input input--underline" type="number" min="1" max="10080" placeholder="30" required>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="create-cardPrice" data-i18n="bingo.labelCardPrice"></label>
+                  <input id="create-cardPrice" class="input input--underline" type="text" inputmode="decimal" required value="1">
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="create-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
+                  <input id="create-minPlayersToStart" class="input input--underline" type="number" min="1" max="100000" value="2" required>
+                </div>
+                <div class="field field--check-cell bo-form-profile__full">
                   <label class="check">
-                    <input type="radio" name="create-prizePayoutMode" id="create-prizePayoutMode-immediate" value="IMMEDIATE_FULL_PER_WINNER" checked>
+                    <input id="create-active" type="checkbox">
                     <span class="box"></span>
-                    <span data-i18n="bingo.prizePayoutImmediate"></span>
-                  </label>
-                  <label class="check">
-                    <input type="radio" name="create-prizePayoutMode" id="create-prizePayoutMode-deferred" value="DEFERRED_SPLIT_AT_ROUND_END">
-                    <span class="box"></span>
-                    <span data-i18n="bingo.prizePayoutDeferred"></span>
+                    <span data-i18n="bingo.labelActive"></span>
                   </label>
                 </div>
               </div>
-              <div class="field field--check-cell">
-                <label class="check">
-                  <input id="create-active" type="checkbox">
-                  <span class="box"></span>
-                  <span data-i18n="bingo.labelActive"></span>
-                </label>
+            </article>
+
+            <article class="card bo-bingo-form__section bo-bingo-form__section--draw" aria-labelledby="create-section-draw-title">
+              <div class="card-head">
+                <h2 class="card-title" id="create-section-draw-title" data-i18n="bingo.sectionDrawModes"></h2>
               </div>
+              <div class="bo-bingo-form__section-content bo-bingo-form__section-body">
+                <div class="field bo-form-profile__full">
+                  <span class="field-label" data-i18n="bingo.labelDrawMode"></span>
+                  <div class="field-group bo-radio-stack">
+                    <label class="check">
+                      <input type="radio" name="create-drawMode" id="create-drawMode-virtual" value="VIRTUAL" checked>
+                      <span class="box"></span>
+                      <span data-i18n="bingo.drawModeVirtual"></span>
+                    </label>
+                    <label class="check">
+                      <input type="radio" name="create-drawMode" id="create-drawMode-live" value="LIVE">
+                      <span class="box"></span>
+                      <span data-i18n="bingo.drawModeLive"></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="field bo-form-profile__full">
+                  <span class="field-label" data-i18n="bingo.labelPrizePayoutMode"></span>
+                  <div class="field-group bo-radio-stack">
+                    <label class="check">
+                      <input type="radio" name="create-prizePayoutMode" id="create-prizePayoutMode-immediate" value="IMMEDIATE_FULL_PER_WINNER" checked>
+                      <span class="box"></span>
+                      <span data-i18n="bingo.prizePayoutImmediate"></span>
+                    </label>
+                    <label class="check">
+                      <input type="radio" name="create-prizePayoutMode" id="create-prizePayoutMode-deferred" value="DEFERRED_SPLIT_AT_ROUND_END">
+                      <span class="box"></span>
+                      <span data-i18n="bingo.prizePayoutDeferred"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </article>
             </div>
 
-            <div class="field bo-form-profile__full bo-form-profile__roles-block">
-              <span class="field-label" data-i18n="bingo.prizesTitle"></span>
-              <div id="create-prizes"></div>
+            <div class="bo-bingo-form__col bo-bingo-form__col--right">
+            <article class="card bo-bingo-form__section bo-bingo-form__section--prizes" aria-labelledby="create-section-prizes-title">
+              <div class="card-head">
+                <h2 class="card-title" id="create-section-prizes-title" data-i18n="bingo.sectionPrizes"></h2>
+              </div>
+              <div class="bo-bingo-form__section-content bo-bingo-form__section-content--prizes">
+                <div class="bo-bingo-prize-mode-bar">
+                  <div class="field field--underline bo-bingo-prize-mode-bar__mode">
+                    <label class="field-label" for="create-prizeMode" data-i18n="bingo.prizeMode"></label>
+                    <select id="create-prizeMode" class="input input--underline" data-bo-prize-mode>
+                      <option value="FIXED" data-i18n="bingo.prizeTypeFixed"></option>
+                      <option value="PERCENTAGE" data-i18n="bingo.prizeTypePercent"></option>
+                    </select>
+                  </div>
+                  <div class="field field--underline bo-bingo-prize-mode-bar__seed" id="create-prize-pool-wrap" hidden>
+                    <label class="field-label" for="create-prizePoolSeed" data-i18n="bingo.labelPrizePoolSeed"></label>
+                    <input id="create-prizePoolSeed" class="input input--underline" type="text" inputmode="decimal" value="0" autocomplete="off">
+                  </div>
+                </div>
+                <div id="create-prizes"></div>
+              </div>
+            </article>
             </div>
 
-            <div class="bo-form-profile__actions">
-              <button type="button" class="bo-form-profile__cancel" id="bo-bingo-create-cancel" data-i18n="bingo.cancel"></button>
-              <button type="submit" class="btn btn--primary" data-i18n="bingoExtra.saveChanges"></button>
+            <div class="card bo-bingo-form__actions-card">
+              <div class="bo-form-profile__actions">
+                <button type="button" class="bo-form-profile__cancel" id="bo-bingo-create-cancel" data-i18n="bingo.cancel"></button>
+                <button type="submit" class="btn btn--primary" data-i18n="bingoExtra.saveChanges"></button>
+              </div>
             </div>
           </form>
         </section>
 
         <!-- Editar bingo -->
-        <section class="col-12 card" id="bo-bingo-edit-panel" hidden>
-          <div class="card-head">
+        <section class="col-12 bo-bingo-page" id="bo-bingo-edit-panel" hidden>
+          <header class="bo-bingo-page__head">
             <div class="card-title-wrap">
               <span class="eyebrow" data-i18n="bingoExtra.breadcrumbAdminBingos"></span>
-              <h2 class="card-title" id="bo-bingo-edit-heading"></h2>
+              <h1 class="card-title" id="bo-bingo-edit-heading"></h1>
             </div>
-          </div>
-          <form id="bo-bingo-edit-form" class="bo-form-profile">
-            <div class="bo-form-profile__grid">
-              <div class="field field--underline">
-                <label class="field-label" for="edit-roomId" data-i18n="bingo.labelRoom"></label>
-                <select id="edit-roomId" class="input input--underline" required></select>
+          </header>
+          <form id="bo-bingo-edit-form" class="bo-form-profile bo-bingo-form">
+            <div class="bo-bingo-form__col bo-bingo-form__col--left">
+            <article class="card bo-bingo-form__section bo-bingo-form__section--general" aria-labelledby="edit-section-general-title">
+              <div class="card-head">
+                <h2 class="card-title" id="edit-section-general-title" data-i18n="bingo.sectionGeneral"></h2>
               </div>
-              <div class="field field--underline">
-                <label class="field-label" for="edit-name" data-i18n="bingo.labelName"></label>
-                <input id="edit-name" class="input input--underline" type="text" required autocomplete="off">
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="edit-bingoType" data-i18n="bingo.labelBingoType"></label>
-                <select id="edit-bingoType" class="input input--underline" required>
-                  <option value="BINGO_75" data-i18n="bingo.type75"></option>
-                  <option value="BINGO_90" data-i18n="bingo.type90"></option>
-                </select>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="edit-start" data-i18n="bingo.labelStart"></label>
-                <input id="edit-start" class="input input--underline" type="datetime-local" required>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="edit-end" data-i18n="bingo.labelEnd"></label>
-                <input id="edit-end" class="input input--underline" type="datetime-local" required>
-                <p class="field-help" data-i18n="bingo.helpEnd"></p>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="edit-repeatEveryMinutes" data-i18n="bingo.labelRepeatEvery"></label>
-                <input id="edit-repeatEveryMinutes" class="input input--underline" type="number" min="1" max="10080" placeholder="30" required>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="edit-cardPrice" data-i18n="bingo.labelCardPrice"></label>
-                <input id="edit-cardPrice" class="input input--underline" type="text" inputmode="decimal" required>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="edit-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
-                <input id="edit-minPlayersToStart" class="input input--underline" type="number" min="1" required>
-              </div>
-              <div class="field bo-form-profile__full">
-                <span class="field-label" data-i18n="bingo.labelPrizePayoutMode"></span>
-                <p class="field-help" style="margin-bottom:8px;" data-i18n="bingo.helpPrizePayoutMode"></p>
-                <div class="field-group bo-radio-stack">
+              <div class="bo-bingo-form__section-content bo-form-profile__grid">
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-roomId" data-i18n="bingo.labelRoom"></label>
+                  <select id="edit-roomId" class="input input--underline" required></select>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-name" data-i18n="bingo.labelName"></label>
+                  <input id="edit-name" class="input input--underline" type="text" required autocomplete="off">
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-bingoType" data-i18n="bingo.labelBingoType"></label>
+                  <select id="edit-bingoType" class="input input--underline" required>
+                    <option value="BINGO_75" data-i18n="bingo.type75"></option>
+                    <option value="BINGO_90" data-i18n="bingo.type90"></option>
+                  </select>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-start" data-i18n="bingo.labelStart"></label>
+                  <input id="edit-start" class="input input--underline" type="datetime-local" required>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-end" data-i18n="bingo.labelEnd"></label>
+                  <input id="edit-end" class="input input--underline" type="datetime-local" required>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-repeatEveryMinutes" data-i18n="bingo.labelRepeatEvery"></label>
+                  <input id="edit-repeatEveryMinutes" class="input input--underline" type="number" min="1" max="10080" placeholder="30" required>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-cardPrice" data-i18n="bingo.labelCardPrice"></label>
+                  <input id="edit-cardPrice" class="input input--underline" type="text" inputmode="decimal" required>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="edit-minPlayersToStart" data-i18n="bingo.labelMinPlayersStart"></label>
+                  <input id="edit-minPlayersToStart" class="input input--underline" type="number" min="1" required>
+                </div>
+                <div class="field field--check-cell bo-form-profile__full">
                   <label class="check">
-                    <input type="radio" name="edit-prizePayoutMode" id="edit-prizePayoutMode-immediate" value="IMMEDIATE_FULL_PER_WINNER" checked>
+                    <input id="edit-active" type="checkbox">
                     <span class="box"></span>
-                    <span data-i18n="bingo.prizePayoutImmediate"></span>
-                  </label>
-                  <label class="check">
-                    <input type="radio" name="edit-prizePayoutMode" id="edit-prizePayoutMode-deferred" value="DEFERRED_SPLIT_AT_ROUND_END">
-                    <span class="box"></span>
-                    <span data-i18n="bingo.prizePayoutDeferred"></span>
+                    <span data-i18n="bingo.labelActive"></span>
                   </label>
                 </div>
               </div>
-              <div class="field field--check-cell">
-                <label class="check">
-                  <input id="edit-active" type="checkbox">
-                  <span class="box"></span>
-                  <span data-i18n="bingo.labelActive"></span>
-                </label>
+            </article>
+
+            <article class="card bo-bingo-form__section bo-bingo-form__section--draw" aria-labelledby="edit-section-draw-title">
+              <div class="card-head">
+                <h2 class="card-title" id="edit-section-draw-title" data-i18n="bingo.sectionDrawModes"></h2>
               </div>
+              <div class="bo-bingo-form__section-content bo-bingo-form__section-body">
+                <div class="field bo-form-profile__full">
+                  <span class="field-label" data-i18n="bingo.labelDrawMode"></span>
+                  <div class="field-group bo-radio-stack">
+                    <label class="check">
+                      <input type="radio" name="edit-drawMode" id="edit-drawMode-virtual" value="VIRTUAL" checked>
+                      <span class="box"></span>
+                      <span data-i18n="bingo.drawModeVirtual"></span>
+                    </label>
+                    <label class="check">
+                      <input type="radio" name="edit-drawMode" id="edit-drawMode-live" value="LIVE">
+                      <span class="box"></span>
+                      <span data-i18n="bingo.drawModeLive"></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="field bo-form-profile__full">
+                  <span class="field-label" data-i18n="bingo.labelPrizePayoutMode"></span>
+                  <div class="field-group bo-radio-stack">
+                    <label class="check">
+                      <input type="radio" name="edit-prizePayoutMode" id="edit-prizePayoutMode-immediate" value="IMMEDIATE_FULL_PER_WINNER" checked>
+                      <span class="box"></span>
+                      <span data-i18n="bingo.prizePayoutImmediate"></span>
+                    </label>
+                    <label class="check">
+                      <input type="radio" name="edit-prizePayoutMode" id="edit-prizePayoutMode-deferred" value="DEFERRED_SPLIT_AT_ROUND_END">
+                      <span class="box"></span>
+                      <span data-i18n="bingo.prizePayoutDeferred"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </article>
             </div>
 
-            <div class="field bo-form-profile__full bo-form-profile__roles-block">
-              <span class="field-label" data-i18n="bingo.prizesTitle"></span>
-              <div id="edit-prizes"></div>
+            <div class="bo-bingo-form__col bo-bingo-form__col--right">
+            <article class="card bo-bingo-form__section bo-bingo-form__section--prizes" aria-labelledby="edit-section-prizes-title">
+              <div class="card-head">
+                <h2 class="card-title" id="edit-section-prizes-title" data-i18n="bingo.sectionPrizes"></h2>
+              </div>
+              <div class="bo-bingo-form__section-content bo-bingo-form__section-content--prizes">
+                <div class="bo-bingo-prize-mode-bar">
+                  <div class="field field--underline bo-bingo-prize-mode-bar__mode">
+                    <label class="field-label" for="edit-prizeMode" data-i18n="bingo.prizeMode"></label>
+                    <select id="edit-prizeMode" class="input input--underline" data-bo-prize-mode>
+                      <option value="FIXED" data-i18n="bingo.prizeTypeFixed"></option>
+                      <option value="PERCENTAGE" data-i18n="bingo.prizeTypePercent"></option>
+                    </select>
+                  </div>
+                  <div class="field field--underline bo-bingo-prize-mode-bar__seed" id="edit-prize-pool-wrap" hidden>
+                    <label class="field-label" for="edit-prizePoolSeed" data-i18n="bingo.labelPrizePoolSeed"></label>
+                    <input id="edit-prizePoolSeed" class="input input--underline" type="text" inputmode="decimal" value="0" autocomplete="off">
+                  </div>
+                </div>
+                <div id="edit-prizes"></div>
+              </div>
+            </article>
             </div>
 
-            <div class="bo-form-profile__actions">
-              <button type="button" class="bo-form-profile__cancel" id="bo-bingo-edit-cancel" data-i18n="bingo.cancel"></button>
-              <button type="submit" class="btn btn--primary" id="bo-bingo-edit-save" data-i18n="bingoExtra.saveChanges"></button>
+            <div class="card bo-bingo-form__actions-card">
+              <div class="bo-form-profile__actions">
+                <button type="button" class="bo-form-profile__cancel" id="bo-bingo-edit-cancel" data-i18n="bingo.cancel"></button>
+                <button type="submit" class="btn btn--primary" id="bo-bingo-edit-save" data-i18n="bingoExtra.saveChanges"></button>
+              </div>
             </div>
           </form>
         </section>
@@ -281,6 +379,16 @@
                   <label class="field-label" for="bo-rounds-filter-sequence" data-i18n="bingo.roundsFilterSequence"></label>
                   <input id="bo-rounds-filter-sequence" class="input input--underline mono" type="number" min="1" step="1" placeholder="#" autocomplete="off" name="sequence">
                 </div>
+                <div class="field field--underline bo-rounds-dialog__field-status">
+                  <label class="field-label" for="bo-rounds-filter-status" data-i18n="bingo.roundsFilterStatus"></label>
+                  <select id="bo-rounds-filter-status" class="input input--underline" name="statusFilter">
+                    <option value="COMPLETED" data-i18n="bingo.roundStatusCompleted"></option>
+                    <option value="CANCELLED" data-i18n="bingo.roundStatusCancelled"></option>
+                    <option value="SCHEDULED" data-i18n="bingo.roundStatusScheduled"></option>
+                    <option value="DRAWING" data-i18n="bingo.roundStatusDrawing"></option>
+                    <option value="ALL" data-i18n="bingo.roundsFilterStatusAll"></option>
+                  </select>
+                </div>
                 <button type="submit" class="btn btn--ghost" id="bo-rounds-filter-apply" data-i18n="bingo.roundsFilterApply"></button>
                 <button type="button" class="btn btn--ghost" id="bo-rounds-filter-clear" data-i18n="bingo.roundsFilterClear"></button>
               </form>
@@ -293,6 +401,16 @@
             <footer class="bo-rounds-dialog__foot">
               <button type="button" class="btn btn--primary" id="bo-bingo-rounds-dismiss" data-i18n="bingo.roundsClose"></button>
             </footer>
+          </div>
+        </dialog>
+
+        <dialog id="bo-round-detail-dialog" class="bo-round-detail-dialog">
+          <div class="bo-round-detail-dialog__inner">
+            <header class="bo-round-detail-dialog__head">
+              <h3 class="bo-round-detail-dialog__title" id="bo-round-detail-dialog-title"></h3>
+              <button type="button" class="btn btn--ghost btn--sm" id="bo-round-detail-dialog-close" data-i18n="bingo.roundDetailClose"></button>
+            </header>
+            <div id="bo-round-detail-dialog-body" class="bo-round-detail-dialog__body"></div>
           </div>
         </dialog>
 

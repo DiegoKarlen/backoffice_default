@@ -4,6 +4,7 @@ import {
   fetchPublicRooms,
   fetchUpcoming,
   liveEventsUrl,
+  postDrawBall,
   type LivePhase,
   type LiveSnapshot,
   type OccurrencePrize,
@@ -185,6 +186,12 @@ function formatUpcomingStart(iso: string): string {
 
 const FIGURE_LABEL: Record<string, string> = {
   LINE: "Premio línea",
+  DOUBLE_LINE: "Premio doble línea",
+  LETTER_B: "Premio letra B",
+  LETTER_I: "Premio letra I",
+  LETTER_N: "Premio letra N",
+  LETTER_G: "Premio letra G",
+  LETTER_O: "Premio letra O",
   PERIMETER: "Premio perímetro",
   FULL_HOUSE: "Premio cartón lleno",
 };
@@ -203,23 +210,49 @@ type PrizeAwardedSsePayload = {
   deferredSettlement?: boolean;
 };
 
-function formatPrizeArs(cents: number): string {
-  const pesos = cents / 100;
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(pesos);
+type PrizeToastBatch = { items: PrizeAwardedSsePayload[] };
+
+/** Título del aviso: «¡PREMIO LINEA!», etc. */
+const FIGURE_PRIZE_BADGE: Record<string, string> = {
+  LINE: "LINEA",
+  DOUBLE_LINE: "DOBLE LINEA",
+  LETTER_B: "LETRA B",
+  LETTER_I: "LETRA I",
+  LETTER_N: "LETRA N",
+  LETTER_G: "LETRA G",
+  LETTER_O: "LETRA O",
+  PERIMETER: "PERIMETRO",
+  FULL_HOUSE: "CARTON LLENO",
+};
+
+function prizeFigureBadgeText(figure: string): string {
+  const name = FIGURE_PRIZE_BADGE[figure] ?? figure.replace(/_/g, " ");
+  return `¡PREMIO ${name}!`;
 }
 
-const prizeToastQueue: PrizeAwardedSsePayload[] = [];
+const PRIZE_FIGURE_ORDER = [
+  "LINE",
+  "DOUBLE_LINE",
+  "LETTER_B",
+  "LETTER_I",
+  "LETTER_N",
+  "LETTER_G",
+  "LETTER_O",
+  "PERIMETER",
+  "FULL_HOUSE",
+];
+
+const prizeToastQueue: PrizeToastBatch[] = [];
+/** Premios de la misma bolilla (varios SSE en el mismo turno del motor). */
+let prizeToastPending: PrizeAwardedSsePayload[] = [];
+let prizeToastFlushTimer: ReturnType<typeof setTimeout> | null = null;
+/** Ventana para agrupar varios `prize_awarded` de la misma bolilla (SSE separados). */
+const PRIZE_TOAST_BATCH_MS = 80;
 let prizeToastPlaying = false;
 let prizeToastTimer: ReturnType<typeof setTimeout> | null = null;
 const PRIZE_TOAST_MS = 9000;
 /** Cartón lleno: más tiempo + fase “acreditando” antes de mostrar monto. */
 const PRIZE_TOAST_FULL_HOUSE_MS = 10_500;
-const PRIZE_PAYING_PHASE_MS = 1600;
 
 /**
  * Tras `FULL_HOUSE`, el servidor pasa a idle y la UI cerraba el sorteo al instante.
@@ -244,60 +277,96 @@ function clearBingoCloseHold(): void {
 
 function hidePrizeToast(): void {
   const el = document.querySelector<HTMLElement>("#bd-prize-toast");
-  const payingEl = document.querySelector<HTMLElement>("#bd-prize-toast-paying");
-  const detailEl = document.querySelector<HTMLElement>("#bd-prize-toast-detail");
-  if (payingEl) {
-    payingEl.hidden = true;
-    payingEl.classList.remove("bd-prize-toast__paying--pulse");
-  }
-  if (detailEl) detailEl.hidden = false;
   if (el) {
     el.hidden = true;
     el.classList.remove("bd-prize-toast--visible");
   }
 }
 
-function displayPrizeToastPayload(p: PrizeAwardedSsePayload): void {
+function groupPrizeBatchByFigure(items: PrizeAwardedSsePayload[]): Map<string, PrizeAwardedSsePayload[]> {
+  const m = new Map<string, PrizeAwardedSsePayload[]>();
+  for (const p of items) {
+    const list = m.get(p.figure) ?? [];
+    list.push(p);
+    m.set(p.figure, list);
+  }
+  return m;
+}
+
+function uniqueWinnerNamesList(group: PrizeAwardedSsePayload[]): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const p of group) {
+    const u = p.playerUsername?.trim() || "Jugador";
+    if (seen.has(u)) continue;
+    seen.add(u);
+    names.push(u);
+  }
+  return names;
+}
+
+function renderPrizeToastWinnersHtml(names: string[]): string {
+  const label = names.length === 1 ? "Ganador" : "Ganadores";
+  const rows = names
+    .map((n) => `<li class="bd-prize-toast__winner-name mono">${esc(n)}</li>`)
+    .join("");
+  return `<p class="bd-prize-toast__winners-label">${esc(label)}</p>
+<ul class="bd-prize-toast__winners-list">${rows}</ul>`;
+}
+
+function buildPrizeToastView(items: PrizeAwardedSsePayload[]): {
+  badge: string;
+  bodyHtml: string;
+  showBadge: boolean;
+} {
+  const byFigure = groupPrizeBatchByFigure(items);
+  const figures = [...byFigure.keys()].sort(
+    (a, b) => PRIZE_FIGURE_ORDER.indexOf(a) - PRIZE_FIGURE_ORDER.indexOf(b),
+  );
+
+  if (figures.length === 1) {
+    const fig = figures[0]!;
+    const names = uniqueWinnerNamesList(byFigure.get(fig)!);
+    return {
+      badge: prizeFigureBadgeText(fig),
+      bodyHtml: renderPrizeToastWinnersHtml(names),
+      showBadge: true,
+    };
+  }
+
+  const blocks = figures.map((fig) => {
+    const names = uniqueWinnerNamesList(byFigure.get(fig)!);
+    return `<div class="bd-prize-toast__entry">
+  <p class="bd-prize-toast__figure-title">${esc(prizeFigureBadgeText(fig))}</p>
+  ${renderPrizeToastWinnersHtml(names)}
+</div>`;
+  });
+  return {
+    badge: "",
+    bodyHtml: `<div class="bd-prize-toast__entries--multi">${blocks.join("")}</div>`,
+    showBadge: false,
+  };
+}
+
+function displayPrizeToastBatch(items: PrizeAwardedSsePayload[]): void {
+  if (!items.length) return;
   const root = document.querySelector<HTMLElement>("#bd-prize-toast");
   const badgeEl = document.querySelector<HTMLElement>("#bd-prize-toast-badge");
   const payingEl = document.querySelector<HTMLElement>("#bd-prize-toast-paying");
   const detailEl = document.querySelector<HTMLElement>("#bd-prize-toast-detail");
-  const figEl = document.querySelector<HTMLElement>("#bd-prize-toast-figure");
-  const winEl = document.querySelector<HTMLElement>("#bd-prize-toast-winner");
-  const amtEl = document.querySelector<HTMLElement>("#bd-prize-toast-amount");
-  if (!root || !badgeEl || !figEl || !winEl || !amtEl) return;
+  const entriesEl = document.querySelector<HTMLElement>("#bd-prize-toast-entries");
+  if (!root || !badgeEl || !entriesEl) return;
 
-  const deferred = p.deferredSettlement === true;
-  const isFullHouse = p.figure === "FULL_HOUSE";
+  const view = buildPrizeToastView(items);
+  badgeEl.textContent = view.badge;
+  badgeEl.hidden = !view.showBadge;
+  entriesEl.innerHTML = view.bodyHtml;
 
-  figEl.textContent = FIGURE_LABEL[p.figure] ?? p.figure;
-  winEl.textContent = p.playerUsername?.trim() ? p.playerUsername : "Jugador";
-  amtEl.textContent = deferred ? "Liquidación al finalizar el sorteo" : formatPrizeArs(Number.isFinite(p.amountCents ?? NaN) ? (p.amountCents as number) : 0);
-
-  if (isFullHouse && payingEl && detailEl) {
-    const reduced =
-      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const payingMs = reduced ? 0 : PRIZE_PAYING_PHASE_MS;
-    badgeEl.textContent = "¡BINGO!";
-    payingEl.textContent = deferred
-      ? "El importe se define al cerrar el sorteo…"
-      : "Acreditando premio al jugador…";
-    payingEl.hidden = false;
-    detailEl.hidden = true;
-    if (!reduced) payingEl.classList.add("bd-prize-toast__paying--pulse");
-    window.setTimeout(() => {
-      payingEl.hidden = true;
-      payingEl.classList.remove("bd-prize-toast__paying--pulse");
-      detailEl.hidden = false;
-    }, payingMs);
-  } else {
-    badgeEl.textContent = "¡Premio!";
-    if (payingEl) {
-      payingEl.hidden = true;
-      payingEl.classList.remove("bd-prize-toast__paying--pulse");
-    }
-    if (detailEl) detailEl.hidden = false;
+  if (payingEl) {
+    payingEl.hidden = true;
+    payingEl.classList.remove("bd-prize-toast__paying--pulse");
   }
+  if (detailEl) detailEl.hidden = false;
 
   root.hidden = false;
   root.classList.remove("bd-prize-toast--visible");
@@ -307,14 +376,31 @@ function displayPrizeToastPayload(p: PrizeAwardedSsePayload): void {
   });
 }
 
+function flushPrizeToastPending(): void {
+  if (!prizeToastPending.length) return;
+  const batch = prizeToastPending.splice(0);
+  prizeToastQueue.push({ items: batch });
+  processPrizeToastQueue();
+}
+
+function schedulePrizeToastFlush(): void {
+  if (prizeToastFlushTimer !== null) clearTimeout(prizeToastFlushTimer);
+  prizeToastFlushTimer = window.setTimeout(() => {
+    prizeToastFlushTimer = null;
+    flushPrizeToastPending();
+  }, PRIZE_TOAST_BATCH_MS);
+}
+
 function processPrizeToastQueue(): void {
   if (prizeToastPlaying) return;
-  const p = prizeToastQueue.shift();
-  if (!p) return;
+  const batch = prizeToastQueue.shift();
+  if (!batch?.items.length) return;
 
   prizeToastPlaying = true;
-  displayPrizeToastPayload(p);
-  const durationMs = p.figure === "FULL_HOUSE" ? PRIZE_TOAST_FULL_HOUSE_MS : PRIZE_TOAST_MS;
+  displayPrizeToastBatch(batch.items);
+  const durationMs = batch.items.some((p) => p.figure === "FULL_HOUSE")
+    ? PRIZE_TOAST_FULL_HOUSE_MS
+    : PRIZE_TOAST_MS;
 
   if (prizeToastTimer !== null) {
     clearTimeout(prizeToastTimer);
@@ -332,9 +418,10 @@ function processPrizeToastQueue(): void {
 function enqueuePrizeToast(p: PrizeAwardedSsePayload): void {
   if (p.figure === "FULL_HOUSE") {
     requestCloseHoldForFullHousePrize();
+    lockLiveBallPickerUi();
   }
-  prizeToastQueue.push(p);
-  processPrizeToastQueue();
+  prizeToastPending.push(p);
+  schedulePrizeToastFlush();
 }
 
 function isPrizeAwardedPayload(x: unknown): x is PrizeAwardedSsePayload {
@@ -358,7 +445,15 @@ function formatMoney(amount: string): string {
   return new Intl.NumberFormat("es", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n);
 }
 
-function renderPrizesHtml(prizes: OccurrencePrize[]): string {
+function formatConfiguredPrizeValue(p: OccurrencePrize, prizeMode?: string): string {
+  if (prizeMode === "PERCENTAGE" || p.displayAmount?.includes("%")) {
+    return p.displayAmount ?? `${p.amount}%`;
+  }
+  const raw = p.displayAmount ?? p.amount;
+  return `$ ${formatMoney(raw)}`;
+}
+
+function renderPrizesHtml(prizes: OccurrencePrize[], prizeMode?: string): string {
   if (!prizes.length) {
     return `<p class="bd-muted">Este bingo no tiene premios configurados.</p>`;
   }
@@ -368,7 +463,7 @@ function renderPrizesHtml(prizes: OccurrencePrize[]): string {
       (p) => `
     <article class="bd-prize bd-card bd-card--prize">
       <span class="bd-prize__lbl">${esc(FIGURE_LABEL[p.figure] ?? p.figure)}</span>
-      <span class="bd-prize__val mono">$ ${esc(formatMoney(p.amount))}</span>
+      <span class="bd-prize__val mono">${esc(formatConfiguredPrizeValue(p, prizeMode))}</span>
     </article>`,
     )
     .join("");
@@ -932,14 +1027,112 @@ function startRoundIntroCountdown(): void {
   step(0);
 }
 
+/** Tras cartón lleno / cierre: bloqueo local hasta nueva partida (refuerza snapshot). */
+let roundLiveMarkingClosed = false;
+
+const LIVE_PICKER_HINT_OPEN = "Clic en el número que salió en el video.";
+const LIVE_PICKER_HINT_CLOSED = "Sorteo finalizado. No se pueden marcar más bolas.";
+
+function canMarkLiveBallsFromSnapshot(cur: NonNullable<LiveSnapshot["current"]> | null | undefined): boolean {
+  if (roundLiveMarkingClosed) return false;
+  if (!cur || cur.drawMode !== "LIVE") return false;
+  if (cur.canMarkLiveBall === false) return false;
+  return true;
+}
+
+function setRoundLiveMarkingClosed(closed: boolean): void {
+  roundLiveMarkingClosed = closed;
+}
+
+function renderLiveBallPicker(cur: NonNullable<LiveSnapshot["current"]>): void {
+  const grid = document.getElementById("bd-live-picker-grid");
+  if (!grid) return;
+  const total = cur.totalBalls || (cur.bingoType === "BINGO_90" ? 90 : 75);
+  const drawnSet = new Set(cur.drawn);
+  const markingEnabled = canMarkLiveBallsFromSnapshot(cur);
+  const hint = document.getElementById("bd-live-picker-hint");
+  const picker = document.querySelector<HTMLElement>(".bd-live-picker");
+  if (hint) {
+    hint.textContent = markingEnabled ? LIVE_PICKER_HINT_OPEN : LIVE_PICKER_HINT_CLOSED;
+  }
+  picker?.classList.toggle("bd-live-picker--closed", !markingEnabled);
+  grid.classList.toggle("bd-live-picker__grid--locked", !markingEnabled);
+
+  const rows = total <= 75 ? 5 : Math.ceil(total / 15);
+  grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+
+  const parts: string[] = [];
+  for (let n = 1; n <= total; n++) {
+    const isDrawn = drawnSet.has(n);
+    let stateClass = " is-drawn";
+    if (!isDrawn) {
+      stateClass = markingEnabled ? " is-available" : " is-locked";
+    }
+    const disabled = isDrawn || !markingEnabled;
+    const img =
+      total <= 75
+        ? `<img class="bd-live-ball__img" src="${esc(ballNumberedUrl(n))}" alt="" width="64" height="64" loading="lazy" />`
+        : `<span class="bd-live-ball__num mono">${n}</span>`;
+    parts.push(
+      `<button type="button" class="bd-live-ball${stateClass}" data-ball="${n}"${disabled ? " disabled" : ""} aria-label="Bola ${n}"${disabled && !isDrawn ? ' aria-disabled="true"' : ""}>${img}</button>`,
+    );
+  }
+  grid.innerHTML = parts.join("");
+}
+
+/** Bloquea la grilla sin re-fetch (p. ej. durante animación de cierre). */
+function lockLiveBallPickerUi(): void {
+  setRoundLiveMarkingClosed(true);
+  const grid = document.getElementById("bd-live-picker-grid");
+  const hint = document.getElementById("bd-live-picker-hint");
+  const picker = document.querySelector<HTMLElement>(".bd-live-picker");
+  if (hint) hint.textContent = LIVE_PICKER_HINT_CLOSED;
+  picker?.classList.add("bd-live-picker--closed");
+  grid?.classList.add("bd-live-picker__grid--locked");
+  grid?.querySelectorAll<HTMLButtonElement>(".bd-live-ball.is-available").forEach((btn) => {
+    btn.classList.remove("is-available");
+    btn.classList.add("is-locked");
+    btn.disabled = true;
+  });
+}
+
+async function tryMarkLiveBall(num: number): Promise<void> {
+  if (!canMarkLiveBallsFromSnapshot(lastSnap?.current ?? null)) return;
+  try {
+    await postDrawBall(num);
+  } catch (e) {
+    window.alert(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** Panel video + grilla: solo durante sorteo Live activo (no en espera ni en 3-2-1). */
+function shouldShowLiveDrawPanel(s: LiveSnapshot): boolean {
+  if (s.phase !== "drawing" || s.current?.drawMode !== "LIVE") return false;
+  if (roundOpeningHoldApply) return false;
+  const root = document.getElementById("bd-root");
+  if (root?.classList.contains("sd--round-intro")) return false;
+  return true;
+}
+
 function applySnapshotInner(s: LiveSnapshot): void {
   const root = document.querySelector<HTMLDivElement>("#bd-root");
   const cur = s.current;
   const live = s.phase === "drawing";
+  const drawMode = cur?.drawMode === "LIVE" ? "LIVE" : "VIRTUAL";
+  const showLivePanel = shouldShowLiveDrawPanel(s);
 
   if (root) {
     root.classList.toggle("sd--idle", !live);
     root.classList.toggle("sd--live", live);
+    if (showLivePanel) root.dataset.drawMode = "LIVE";
+    else root.removeAttribute("data-draw-mode");
+  }
+
+  const liveStage = document.getElementById("bd-live-stage");
+  if (liveStage) liveStage.hidden = !showLivePanel;
+  if (showLivePanel && cur) {
+    if (cur.canMarkLiveBall === true) setRoundLiveMarkingClosed(false);
+    renderLiveBallPicker(cur);
   }
 
   const liveDot = document.querySelector<HTMLSpanElement>("#bd-live-dot");
@@ -991,7 +1184,9 @@ function applySnapshotInner(s: LiveSnapshot): void {
   }
   if (idleBingo && idleWhen) {
     if (!live && s.nextScheduledAt && s.nextName) {
-      idleBingo.textContent = s.nextName;
+      const partida =
+        s.nextRoundSequence != null ? ` · Partida #${s.nextRoundSequence}` : "";
+      idleBingo.textContent = `${s.nextName}${partida}`;
       idleWhen.textContent = formatWhen(s.nextScheduledAt);
     } else if (!live) {
       idleBingo.textContent = "Sin agenda próxima";
@@ -1004,7 +1199,7 @@ function applySnapshotInner(s: LiveSnapshot): void {
 
   const prizesEl = document.querySelector<HTMLDivElement>("#bd-prizes");
   if (prizesEl) {
-    prizesEl.innerHTML = cur ? renderPrizesHtml(cur.prizes ?? []) : "";
+    prizesEl.innerHTML = cur ? renderPrizesHtml(cur.prizes ?? [], cur.prizeMode) : "";
   }
 
   const remainCount =
@@ -1054,7 +1249,7 @@ function applySnapshotInner(s: LiveSnapshot): void {
   }
 
   const bolilleroEl = document.querySelector<HTMLElement>("#bd-bolillero");
-  if (bolilleroEl) bolilleroEl.dataset.mixing = live ? "1" : "0";
+  if (bolilleroEl) bolilleroEl.dataset.mixing = live && drawMode !== "LIVE" ? "1" : "0";
 
   const v = cur?.lastBall ?? null;
   const changed = v != null && v !== prevLastBall;
@@ -1062,7 +1257,8 @@ function applySnapshotInner(s: LiveSnapshot): void {
   const drawnLen = cur?.drawn?.length ?? 0;
   const isFirstBallOfRound = drawnLen === 1 && prevLastBall == null;
   const shouldAnimateBall = Boolean(
-    live &&
+    drawMode !== "LIVE" &&
+      live &&
       changed &&
       flyingImg &&
       v != null &&
@@ -1097,6 +1293,7 @@ function applySnapshot(s: LiveSnapshot): void {
   }
 
   if (!live && lastAppliedPhase === "drawing") {
+    lockLiveBallPickerUi();
     if (bingoClosePipelineActive) return;
     const remainHold = bingoCloseHoldUntilMs - performance.now();
     if (remainHold > 0) {
@@ -1117,6 +1314,7 @@ function applySnapshot(s: LiveSnapshot): void {
   if (live && lastAppliedPhase === "idle") {
     cancelBingoClosing();
     clearBingoCloseHold();
+    setRoundLiveMarkingClosed(false);
     roundOpeningHoldApply = true;
     applySnapshotInner(s);
     lastAppliedPhase = s.phase;
@@ -1207,6 +1405,17 @@ const DISPLAY_MARKUP = `
         </div>
       </div>
     </div>
+
+    <section class="bd-live-stage sd-show-live" id="bd-live-stage" hidden aria-label="Sorteo en vivo por video">
+      <div class="bd-live-video" id="bd-live-video">
+        <span class="bd-live-video__label">TRANSMISIÓN EN VIVO</span>
+      </div>
+      <div class="bd-live-picker">
+        <h3 class="bd-live-picker__title">MARCAR BOLA</h3>
+        <p class="bd-live-picker__hint" id="bd-live-picker-hint">Clic en el número que salió en el video.</p>
+        <div class="bd-live-picker__grid" id="bd-live-picker-grid"></div>
+      </div>
+    </section>
 
     <div class="bd-fly" id="bd-fly-layer">
       <div class="bd-fly-spawn" id="bd-fly-spawn" hidden aria-hidden="true">
@@ -1316,15 +1525,9 @@ const DISPLAY_MARKUP = `
 
     <div id="bd-prize-toast" class="bd-prize-toast" hidden aria-live="polite" aria-atomic="true">
       <div class="bd-prize-toast__panel">
-        <span id="bd-prize-toast-badge" class="bd-prize-toast__badge">¡Premio!</span>
-        <p id="bd-prize-toast-paying" class="bd-prize-toast__paying" hidden>Acreditando premio al jugador…</p>
+        <span id="bd-prize-toast-badge" class="bd-prize-toast__badge">¡PREMIO LINEA!</span>
         <div id="bd-prize-toast-detail">
-          <p class="bd-prize-toast__line">
-            <span id="bd-prize-toast-figure" class="bd-prize-toast__figure"></span>
-            <span class="bd-prize-toast__sep">·</span>
-            <span id="bd-prize-toast-winner" class="bd-prize-toast__winner mono"></span>
-          </p>
-          <p id="bd-prize-toast-amount" class="bd-prize-toast__amount mono"></p>
+          <div id="bd-prize-toast-entries" class="bd-prize-toast__entries"></div>
         </div>
       </div>
     </div>
@@ -1353,11 +1556,13 @@ function connectEventSource(): void {
 
   es.addEventListener("round_start", () => {
     prevLastBall = null;
+    setRoundLiveMarkingClosed(false);
     fetchAndApplyLiveSnapshot();
     refreshUpcomingPanel?.();
   });
 
   es.addEventListener("round_end", () => {
+    lockLiveBallPickerUi();
     fetchAndApplyLiveSnapshot();
     refreshUpcomingPanel?.();
   });
@@ -1401,6 +1606,16 @@ function mountDisplay(host: HTMLElement): void {
     const ro = new ResizeObserver(() => refreshHistoryStripOnResize());
     ro.observe(histOuter);
   }
+
+  const pickerGrid = host.querySelector<HTMLElement>("#bd-live-picker-grid");
+  pickerGrid?.addEventListener("click", (ev) => {
+    if (!canMarkLiveBallsFromSnapshot(lastSnap?.current ?? null)) return;
+    const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>(".bd-live-ball.is-available");
+    if (!btn || btn.disabled) return;
+    const n = Number(btn.dataset.ball);
+    if (!Number.isInteger(n)) return;
+    void tryMarkLiveBall(n);
+  });
 
   const upcomingBody = host.querySelector<HTMLElement>("#bd-upcoming-body")!;
   if (!upcomingBody) throw new Error("#bd-upcoming-body missing");

@@ -246,7 +246,7 @@ describe("evaluateRoundPrizesAfterBall (integration)", () => {
     await prisma.$disconnect().catch(() => {});
   });
 
-  it("uniquePerRound: only one payout when two cards complete LINE on same draw", async (t) => {
+  it("uniquePerRound + full per winner: both deferred, full LINE at settlement", async (t) => {
     if (!connected) {
       t.skip();
       return;
@@ -266,19 +266,69 @@ describe("evaluateRoundPrizesAfterBall (integration)", () => {
       });
 
       assert.equal(shouldEnd, false);
-      assert.equal(credited.length, 1);
+      assert.equal(credited.length, 2);
+      assert.equal(
+        await prisma.prizePayout.count({ where: { bingoPrizeId: fx.prizeLineId } }),
+        0,
+      );
+      assert.equal(
+        await prisma.deferredRoundPrizeWin.count({ where: { bingoRoundId: fx.roundId } }),
+        2,
+      );
+
+      await settleDeferredSplitPrizesForRound({ bingoRoundId: fx.roundId });
 
       const payouts = await prisma.prizePayout.findMany({
         where: { bingoPrizeId: fx.prizeLineId },
       });
-      assert.equal(payouts.length, 1);
-      assert.ok([fx.cardAId, fx.cardBId].includes(payouts[0]!.playerRoundCardId));
+      assert.equal(payouts.length, 2);
+      assert.equal(payouts.every((p) => p.amountCents === 1000), true);
+      const ids = new Set(payouts.map((p) => p.playerRoundCardId));
+      assert.ok(ids.has(fx.cardAId));
+      assert.ok(ids.has(fx.cardBId));
     } finally {
       await cleanupFixture(fx);
     }
   });
 
-  it("uniquePerRound false: both cards get LINE payout", async (t) => {
+  it("uniquePerRound + deferred: same-draw winners split LINE pool at settlement", async (t) => {
+    if (!connected) {
+      t.skip();
+      return;
+    }
+    const suffix = `ud-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const fx = await createFixture({
+      uniquePerRound: true,
+      suffix,
+      prizePayoutMode: "DEFERRED_SPLIT_AT_ROUND_END",
+    });
+    try {
+      const drawn = row0DrawnNumbers(fx.cellsA);
+      await evaluateRoundPrizesAfterBall({
+        bingoRoundId: fx.roundId,
+        bingoId: fx.bingoId,
+        drawnNumbers: drawn,
+      });
+
+      const deferredRows = await prisma.deferredRoundPrizeWin.findMany({
+        where: { bingoRoundId: fx.roundId },
+      });
+      assert.equal(deferredRows.length, 2);
+
+      await settleDeferredSplitPrizesForRound({ bingoRoundId: fx.roundId });
+
+      const payouts = await prisma.prizePayout.findMany({
+        where: { bingoPrizeId: fx.prizeLineId },
+      });
+      assert.equal(payouts.length, 2);
+      assert.equal(payouts.reduce((a, p) => a + p.amountCents, 0), 1000);
+      assert.equal(payouts.every((p) => p.amountCents === 500), true);
+    } finally {
+      await cleanupFixture(fx);
+    }
+  });
+
+  it("uniquePerRound false: both cards deferred then full LINE at settlement", async (t) => {
     if (!connected) {
       t.skip();
       return;
@@ -300,10 +350,13 @@ describe("evaluateRoundPrizesAfterBall (integration)", () => {
       assert.ok(ids.has(fx.cardAId));
       assert.ok(ids.has(fx.cardBId));
 
+      await settleDeferredSplitPrizesForRound({ bingoRoundId: fx.roundId });
+
       const payouts = await prisma.prizePayout.findMany({
         where: { bingoPrizeId: fx.prizeLineId },
       });
       assert.equal(payouts.length, 2);
+      assert.equal(payouts.every((p) => p.amountCents === 1000), true);
     } finally {
       await cleanupFixture(fx);
     }
@@ -332,6 +385,18 @@ describe("evaluateRoundPrizesAfterBall (integration)", () => {
       });
 
       assert.deepEqual(credited, [fx.cardBId]);
+      assert.equal(
+        await prisma.deferredRoundPrizeWin.count({ where: { bingoRoundId: fx.roundId } }),
+        1,
+      );
+
+      await settleDeferredSplitPrizesForRound({ bingoRoundId: fx.roundId });
+
+      const payouts = await prisma.prizePayout.findMany({
+        where: { bingoPrizeId: fx.prizeLineId },
+      });
+      assert.equal(payouts.length, 1);
+      assert.equal(payouts[0]!.playerRoundCardId, fx.cardBId);
     } finally {
       await cleanupFixture(fx);
     }
