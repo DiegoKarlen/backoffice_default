@@ -136,6 +136,10 @@ export const api = {
       const s = q.toString();
       return apiJson(`/backoffice/bingos/${id}/rounds${s ? `?${s}` : ""}`);
     },
+    roundCards: (bingoId, roundId) =>
+      apiJson(`/backoffice/bingos/${bingoId}/rounds/${roundId}/cards`),
+    roundPrizes: (bingoId, roundId) =>
+      apiJson(`/backoffice/bingos/${bingoId}/rounds/${roundId}/prizes`),
     upcoming: (query) => {
       const q = new URLSearchParams();
       if (query?.limit != null) q.set("limit", String(query.limit));

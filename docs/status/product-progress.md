@@ -56,6 +56,7 @@ Objetivo: cerrar el flujo **negocio completo** con evidencia (manual o automatiz
 | Sorteo de bolillas + persistencia `BingoRoundBall` | [x] | `tickDraw` → `BingoRoundBall` |
 | **Evaluación de cartones jugador vs bolillas** | [x] | Bingo **75**: LINE / PERIMETER / FULL_HOUSE (`bingo-75-figures.ts`); tras cada bolilla `evaluateRoundPrizesAfterBall` |
 | **Acreditación automática de premios** | [x] | `creditPrizeToWinner` desde `round-prize-evaluator`; SSE `prize_awarded`; idempotencia por `PrizePayout` existente |
+| **Bingo Live (`drawMode` LIVE)** | [x] | Video placeholder + grilla manual en display; `POST /public/bingos/live/draw-ball` (sin auth por ahora); virtual sin cambios |
 | Respeto de `minPlayersToStart` con **cartones reales** | [x] | En `startsAt`, con la ronda aún `SCHEDULED`: cuenta cartones; si `< minPlayersToStart` → `CANCELLED` (sin pasar por `DRAWING`) + reembolso; si alcanza cupo → `DRAWING` y `round_start`. Ventas cierran al llegar `startsAt` (`isRoundOpenForPurchase`). |
 
 **Implementación (API):** `api/src/game-engine/bingo/` (`bingo-75/figures.ts`, `prize-evaluator.ts`, `live-session.ts`). Bingo **90**: fuera de alcance por ahora.

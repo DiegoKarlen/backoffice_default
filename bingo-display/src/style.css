@@ -1406,53 +1406,63 @@ body {
   margin-bottom: 8px;
 }
 
-.bd-prize-toast__paying {
-  margin: 0 0 12px;
-  font-size: clamp(15px, 1.75vw, 20px);
+.bd-prize-toast__entries {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+
+.bd-prize-toast__entries--multi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.bd-prize-toast__winners-label {
+  margin: 0 0 10px;
+  font-size: clamp(14px, 1.6vw, 18px);
   font-weight: 600;
-  color: rgba(255, 250, 235, 0.92);
-  letter-spacing: 0.02em;
-}
-
-.bd-prize-toast__paying--pulse {
-  animation: bd-prize-paying-pulse 1.1s ease-in-out infinite;
-}
-
-@keyframes bd-prize-paying-pulse {
-  0%,
-  100% {
-    opacity: 0.75;
-  }
-  50% {
-    opacity: 1;
-    text-shadow: 0 0 18px rgba(52, 211, 153, 0.45);
-  }
-}
-
-.bd-prize-toast__line {
-  margin: 0 0 6px;
-  font-size: clamp(17px, 2vw, 24px);
-  font-weight: 700;
-  color: var(--bd-text);
-  line-height: 1.35;
-}
-
-.bd-prize-toast__sep {
-  margin: 0 0.35em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--bd-quiet);
-  font-weight: 500;
 }
 
-.bd-prize-toast__winner {
-  color: rgba(255, 250, 235, 0.98);
-}
-
-.bd-prize-toast__amount {
+.bd-prize-toast__winners-list {
   margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.bd-prize-toast__winner-name {
+  margin: 0;
+  font-size: clamp(18px, 2.1vw, 26px);
+  font-weight: 700;
+  color: rgba(255, 250, 235, 0.98);
+  line-height: 1.3;
+}
+
+.bd-prize-toast__entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.bd-prize-toast__figure-title {
+  margin: 0 0 8px;
+  font-family: var(--bd-display);
   font-size: clamp(20px, 2.4vw, 30px);
-  font-weight: 800;
+  letter-spacing: 0.12em;
   color: var(--bd-gold);
-  letter-spacing: 0.04em;
+  text-shadow: 0 0 16px rgba(240, 216, 117, 0.3);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1465,8 +1475,179 @@ body {
     transform: translateX(-50%);
   }
 
-  .bd-prize-toast__paying--pulse {
-    animation: none;
-    opacity: 1;
-  }
 }
+
+/* --- Bingo Live (video + manual ball picker) --- */
+
+.bd-canvas.sd--idle .bd-live-stage,
+.bd-canvas.sd--round-intro .bd-live-stage,
+.bd-live-stage[hidden] {
+  display: none !important;
+  pointer-events: none;
+}
+
+#bd-root[data-draw-mode="LIVE"] .bd-machine-cluster,
+#bd-root[data-draw-mode="LIVE"] .bd-fly,
+#bd-root[data-draw-mode="LIVE"] .bd-current-hero {
+  display: none !important;
+}
+
+/* Reserva inferior: panel ÚLTIMAS BOLAS (no solapar con grilla Live) */
+.bd-canvas.sd--live {
+  --bd-historial-reserve: 188px;
+}
+
+/* Columna central Live: video arriba; marcar bola ocupa el resto hasta el historial */
+.bd-live-stage {
+  position: absolute;
+  top: 148px;
+  bottom: calc(20px + var(--bd-historial-reserve, 188px));
+  left: calc(36px + 340px + 16px);
+  right: calc(36px + 400px + 16px);
+  z-index: 8;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 12px;
+  min-height: 0;
+  pointer-events: auto;
+}
+
+.bd-live-video {
+  min-height: 0;
+  height: 100%;
+  background: #000;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 215, 120, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.bd-live-video__label {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: clamp(12px, 1.2vw, 15px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.bd-live-picker {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: rgba(8, 12, 28, 0.82);
+  border: 2px solid rgba(255, 215, 120, 0.28);
+  border-radius: 12px;
+  padding: 12px 14px 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+.bd-live-picker__title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  font-weight: 800;
+  color: #ffd700;
+  text-transform: uppercase;
+}
+
+.bd-live-picker__hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.35;
+  flex-shrink: 0;
+}
+
+.bd-live-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: clamp(4px, 0.65vh, 10px);
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  align-items: center;
+  justify-items: center;
+  overflow: hidden;
+}
+
+.bd-live-ball {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  max-width: 58px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.bd-live-ball__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  border-radius: 50%;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+
+.bd-live-ball__num {
+  font-size: clamp(12px, 1.1vw, 16px);
+  font-weight: 800;
+  color: #e8eeff;
+}
+
+.bd-live-ball.is-available:hover:not(:disabled) {
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 14px rgba(120, 180, 255, 0.65));
+}
+
+.bd-live-ball.is-available:hover:not(:disabled) .bd-live-ball__img {
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.55)) brightness(1.08);
+}
+
+.bd-live-ball.is-drawn {
+  cursor: default;
+  transform: none;
+  filter: none;
+}
+
+.bd-live-ball.is-drawn .bd-live-ball__img {
+  opacity: 0.42;
+  filter: grayscale(0.35) saturate(0.7) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+
+.bd-live-ball.is-drawn .bd-live-ball__num {
+  opacity: 0.45;
+}
+
+.bd-live-picker--closed .bd-live-picker__title {
+  opacity: 0.85;
+}
+
+.bd-live-picker__grid--locked {
+  pointer-events: none;
+}
+
+.bd-live-ball.is-locked {
+  cursor: not-allowed;
+  opacity: 0.42;
+  filter: grayscale(0.35);
+}
+
+.bd-live-ball.is-locked .bd-live-ball__img {
+  opacity: 0.5;
+}
+

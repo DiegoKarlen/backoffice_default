@@ -88,12 +88,30 @@ enum PrizePayoutMode {
   DEFERRED_SPLIT_AT_ROUND_END
 }
 
+/// Virtual = bolas por motor/RNG; Live = operador marca bolas en display (video).
+enum BingoDrawMode {
+  VIRTUAL
+  LIVE
+}
+
 // --- Bingo (simplified) ---
 
 enum BingoFigure {
   LINE
+  DOUBLE_LINE
+  LETTER_B
+  LETTER_I
+  LETTER_N
+  LETTER_G
+  LETTER_O
   PERIMETER
   FULL_HOUSE
+}
+
+/// Modo de premios del bingo: todos los premios son montos fijos o todos son % del pozo.
+enum BingoPrizeMode {
+  FIXED
+  PERCENTAGE
 }
 
 enum RoomStatus {
@@ -127,8 +145,13 @@ model Bingo {
   endDateTime        DateTime?
   repeatEveryMinutes Int?
   cardPrice          Decimal      @db.Decimal(14, 4)
+  /// Todos los premios del bingo: monto fijo o porcentaje del pozo de la partida.
+  prizeMode          BingoPrizeMode @default(FIXED)
+  /// Pozo inicial por partida cuando `prizeMode` = PERCENTAGE (+ ventas de cartones).
+  prizePoolSeed      Decimal      @default(0) @db.Decimal(14, 4)
   minPlayersToStart  Int          @default(2)
   prizePayoutMode    PrizePayoutMode @default(IMMEDIATE_FULL_PER_WINNER)
+  drawMode           BingoDrawMode @default(VIRTUAL)
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   createdByUserId    String?
@@ -186,13 +209,14 @@ model BingoRoundBall {
 }
 
 model BingoPrize {
-  id              String        @id @default(uuid())
+  id              String               @id @default(uuid())
   bingoId         String
-  bingo           Bingo         @relation(fields: [bingoId], references: [id], onDelete: Cascade)
+  bingo           Bingo                @relation(fields: [bingoId], references: [id], onDelete: Cascade)
   figure          BingoFigure
-  amount          Decimal       @db.Decimal(14, 4)
+  /// Monto fijo (ARS) o % del pozo (0–100), según `Bingo.prizeMode`.
+  amount          Decimal              @db.Decimal(14, 4)
   /// Si true, como máximo un cartón gana este premio por partida; si false, cada cartón elegible cobra el monto completo.
-  uniquePerRound  Boolean       @default(true)
+  uniquePerRound  Boolean              @default(true)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   payouts         PrizePayout[]

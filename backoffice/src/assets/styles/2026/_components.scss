@@ -384,9 +384,297 @@
 .bo-bingo-filters--list-align .btn {
   flex: 0 0 auto;
 }
-.bo-bingo-prize-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
-.bo-bingo-prize-row .field { margin: 0; }
-.bo-bingo-prize-unique { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; white-space: nowrap; }
+/* Bingo create/edit — tarjetas del template (como dashboard KPI / forms) */
+.bo-bingo-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: min(1120px, 100%);
+  width: 100%;
+}
+
+.bo-bingo-page__head {
+  padding: 0 2px 4px;
+}
+
+.bo-bingo-page__head .card-title {
+  font-size: 22px;
+}
+
+.bo-bingo-form.bo-form-profile {
+  max-width: 100%;
+}
+
+.bo-bingo-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "left right"
+    "actions actions";
+  gap: 16px;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .bo-bingo-form {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "left"
+      "right"
+      "actions";
+  }
+}
+
+.bo-bingo-form__col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.bo-bingo-form__col--left {
+  grid-area: left;
+}
+
+.bo-bingo-form__col--right {
+  grid-area: right;
+  min-height: 100%;
+}
+
+.bo-bingo-form__section--prizes {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.bo-bingo-form__section--prizes .bo-bingo-form__section-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.bo-bingo-form__section--prizes #create-prizes,
+.bo-bingo-form__section--prizes #edit-prizes {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.bo-bingo-form__actions-card {
+  grid-area: actions;
+}
+
+.bo-bingo-form__section.card,
+.bo-bingo-form__actions-card {
+  margin: 0;
+  min-width: 0;
+  padding: 16px 18px 18px;
+}
+
+.bo-bingo-form__section .card-head {
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.bo-bingo-form__section-content {
+  padding-top: 0;
+}
+
+.bo-bingo-form__section-content.bo-form-profile__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+
+.bo-bingo-form__section-content .field--check-cell {
+  padding-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  .bo-bingo-form__section-content.bo-form-profile__grid {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+}
+
+.bo-bingo-form__section-content .bo-form-profile__full {
+  grid-column: 1 / -1;
+}
+
+.bo-bingo-form__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bo-bingo-form__section-body .field {
+  margin: 0;
+}
+
+.bo-radio-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.bo-radio-stack .check {
+  display: flex;
+  width: 100%;
+}
+
+.bo-bingo-form__help {
+  margin: 0 0 14px;
+  max-width: 52rem;
+  line-height: 1.45;
+}
+
+.bo-bingo-form__actions-card {
+  padding: 12px 18px;
+}
+
+.bo-bingo-form__actions-card .bo-form-profile__actions {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.bo-bingo-form .bo-form-profile__actions {
+  margin-top: 0;
+}
+
+.bo-bingo-prize-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.bo-bingo-prize-mode-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: end;
+  margin-bottom: 4px;
+}
+
+.bo-bingo-prize-mode-bar__mode,
+.bo-bingo-prize-mode-bar__seed {
+  margin: 0;
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .bo-bingo-prize-mode-bar {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bo-bingo-prize-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px 14px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-2, #f8f9fb);
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.bo-bingo-prize-item--off {
+  opacity: 0.65;
+  background: var(--bg-muted);
+}
+
+.bo-bingo-prize-item__lead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bo-bingo-prize-item__toggle {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.bo-bingo-prize-item__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t-base);
+  line-height: 1.2;
+}
+
+.bo-bingo-prize-item__value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding-bottom: 0;
+}
+
+.bo-bingo-prize-item__value-label {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t-muted);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.bo-bingo-prize-item__value-input {
+  width: 4.5rem;
+  min-width: 3.5rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 8px 0 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.bo-bingo-prize-item__value-input:focus {
+  border-bottom-color: var(--primary);
+  outline: none;
+  box-shadow: none;
+}
+
+.bo-bingo-prize-item__unique {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+@media (max-width: 520px) {
+  .bo-bingo-prize-item {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+  }
+
+  .bo-bingo-prize-item__value-row {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
 
 /* Generic 12-column grid */
 .grid {
@@ -497,6 +785,13 @@
   min-width: 140px;
   max-width: 200px;
 }
+.bo-rounds-dialog__field-status {
+  min-width: 180px;
+  max-width: 260px;
+}
+.bo-rounds-dialog__field-status select {
+  width: 100%;
+}
 .table .bo-rounds-cell-partida {
   font-weight: 600;
   color: var(--t-base);
@@ -557,6 +852,265 @@
 .bo-rounds-muted {
   color: var(--t-muted);
   font-size: 13px;
+}
+
+.bo-rounds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bo-round-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 14px 16px 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.bo-round-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 10px;
+}
+
+.bo-round-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.bo-round-card__seq {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t-base);
+}
+
+.bo-round-card__date {
+  font-size: 13px;
+  color: var(--t-muted);
+}
+
+.bo-round-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  font-size: 12px;
+  color: var(--t-muted);
+}
+
+.bo-round-card__stats strong {
+  color: var(--t-base);
+  font-weight: 600;
+}
+
+.bo-round-card__reason {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--t-base);
+  line-height: 1.35;
+}
+
+.bo-round-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.bo-round-card__balls-section {
+  margin-top: 4px;
+}
+
+.bo-round-card__balls-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t-muted);
+}
+
+.bo-round-detail-dialog {
+  border: none;
+  border-radius: 14px;
+  padding: 0;
+  max-width: min(920px, 96vw);
+  width: 100%;
+  max-height: 90vh;
+  background: transparent;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+
+.bo-round-detail-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.bo-round-detail-dialog__inner {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  background: var(--bg-card);
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+
+.bo-round-detail-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+
+.bo-round-detail-dialog__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--t-base);
+}
+
+.bo-round-detail-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 20px;
+}
+
+.bo-round-detail-dialog--cards:not(.bo-round-detail-dialog--cards-player) {
+  max-width: min(640px, 96vw);
+}
+
+.bo-round-detail-dialog--cards.bo-round-detail-dialog--cards-player {
+  max-width: min(1120px, 98vw);
+}
+
+.bo-round-detail-dialog--prizes {
+  max-width: min(720px, 96vw);
+}
+
+.bo-round-detail-cards-table {
+  width: 100%;
+}
+
+.bo-round-detail-cards-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bo-round-detail-cards-player {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bo-round-detail-cards-player .bo-round-cards-back {
+  align-self: flex-start;
+}
+
+.bo-round-detail-cards-summary {
+  margin: 0 0 16px;
+}
+
+.bo-round-detail-cards-view {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.bo-round-detail-player__name {
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t-base);
+}
+
+.bo-round-detail-player__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.bo-round-detail-card-tile {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-2, #f4f5f7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  contain: layout style;
+}
+
+.bo-round-detail-card-tile__head {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--t-muted);
+}
+
+.bo-round-detail-card-tile__head-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-round-detail-card-tile__prizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bo-round-detail-card-prize-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--primary, #0d9488);
+  background: color-mix(in oklab, var(--primary, #0d9488) 14%, var(--bg-card));
+  border: 1px solid color-mix(in oklab, var(--primary, #0d9488) 35%, transparent);
+}
+
+.bo-round-detail-card-tile--won {
+  border-color: color-mix(in oklab, var(--primary, #0d9488) 45%, var(--border-soft));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary, #0d9488) 12%, transparent);
+}
+
+.bo-bingo-card-grid--labeled {
+  grid-template-rows: auto repeat(5, 1fr);
+}
+
+.bo-bingo-colhead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--t-muted);
+  padding-bottom: 2px;
+}
+
+.bo-round-detail-table-wrap {
+  overflow: auto;
 }
 
 /* Player wallet ledger — BO jugadores */

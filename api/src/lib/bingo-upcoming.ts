@@ -1,16 +1,20 @@
 import type { Request } from "express";
-import { BingoFigure, BingoStatus, BingoType, Prisma } from "@prisma/client";
+import { BingoFigure, BingoPrizeMode, BingoStatus, BingoType, Prisma } from "@prisma/client";
+import { bingoPrizeDisplayAmount } from "./bingo-prize-display.js";
 import { prisma } from "./prisma.js";
 
 export type UpcomingPrize = {
   figure: BingoFigure;
   amount: string;
+  /** Monto fijo o «N%» para etiquetas en cliente. */
+  displayAmount: string;
 };
 
 export type UpcomingOccurrence = {
   bingoId: string;
   name: string;
   bingoType: BingoType;
+  prizeMode: BingoPrizeMode;
   cardPrice: string;
   startsAt: string;
   startsAtMs: number;
@@ -186,6 +190,7 @@ export async function buildUpcomingPayload(
     const prizes: UpcomingPrize[] = b.prizes.map((p) => ({
       figure: p.figure,
       amount: p.amount.toString(),
+      displayAmount: bingoPrizeDisplayAmount(b.prizeMode, p),
     }));
 
     for (const r of runs) {
@@ -193,6 +198,7 @@ export async function buildUpcomingPayload(
         bingoId: r.bingoId,
         name: b.name,
         bingoType: r.bingoType,
+        prizeMode: b.prizeMode,
         cardPrice: r.cardPrice,
         startsAt: r.startsAt.toISOString(),
         startsAtMs: r.startsAt.getTime(),

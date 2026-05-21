@@ -1,9 +1,11 @@
 import { Router, type Request, type Response } from "express";
+import { z } from "zod";
 import { RoomStatus } from "@prisma/client";
 import {
   ensureLiveSessionForRoom,
   registerLiveSession,
   getLiveSession,
+  registerDrawnBallForRoom,
 } from "../game-engine/bingo/live-session.js";
 import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
 import { prisma } from "../lib/prisma.js";
@@ -91,6 +93,36 @@ publicBingosRouter.get("/live/events", async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: "Failed to attach SSE" });
+  }
+});
+
+const drawBallSchema = z.object({
+  number: z.number().int().min(1).max(90),
+});
+
+/** Bingo Live: operador marca la bola sorteada en el video (sin auth — solo para entornos de prueba por ahora). */
+publicBingosRouter.post("/live/draw-ball", async (req, res) => {
+  try {
+    const room = await roomFromSlugQuery(req);
+    if (!room) {
+      res.status(400).json({ error: "Missing or invalid roomSlug query parameter" });
+      return;
+    }
+    const parsed = drawBallSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    registerLiveSession(room);
+    const result = await registerDrawnBallForRoom(room.id, parsed.data.number);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to register drawn ball" });
   }
 });
 

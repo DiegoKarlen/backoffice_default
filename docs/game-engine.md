@@ -58,6 +58,19 @@ Familias futuras (`slots/`, `crash/`) se agregan como **hermanas** de `bingo/` b
 
 ---
 
+## Modo de sorteo (`Bingo.drawMode`)
+
+| Valor | Quién sortea | Display |
+|-------|----------------|---------|
+| `VIRTUAL` (default) | Motor: `createBallQueue` + `tickDraw` en timer | UI actual (bolillero, animación, SSE `ball`) |
+| `LIVE` | Operador en **bingo-display** según video | Placeholder de video + grilla 1…N clickeable; `POST /public/bingos/live/draw-ball` (sin auth en dev; reforzar después) |
+
+Tras registrar cada bola (virtual o live), el flujo es el mismo: `BingoRoundBall` → SSE `ball` → `evaluateAfterBall` → premios / fin de ronda.
+
+En `LIVE`, no hay `tickDraw` automático; la ronda termina cuando `evaluateAfterBall` devuelve `true` (p. ej. FULL_HOUSE), no al marcar las 75 bolas.
+
+---
+
 ## Contrato `BingoVariantEngine`
 
 Cada variante de bingo implementa:
@@ -91,9 +104,10 @@ Implementación: `bingo/bingo-75/prize-evaluator.ts` + `prize-winner-order.ts`.
 | Regla | Comportamiento |
 |-------|----------------|
 | Orden de figuras | LINE → PERIMETER → FULL_HOUSE (`BINGO_FIGURE_EVAL_ORDER`) |
-| `prizePayoutMode` (BO / `Bingo`) | `IMMEDIATE_FULL_PER_WINNER` (default): cada ganador cobra el **monto completo** al momento de ganar (`creditPrizeToWinner`). `DEFERRED_SPLIT_AT_ROUND_END`: se registran ganadores en `DeferredRoundPrizeWin`; el **monto configurado por figura** se divide en partes iguales entre todos los ganadores de esa figura en la partida; acreditación al pasar la ronda a `COMPLETED` (`settleDeferredSplitPrizesForRound`). En vivo, SSE `prize_awarded` lleva `deferredSettlement` y **sin** `amountCents`. |
-| `uniquePerRound` (BO) | Por premio: si está activo (default), **un ganador** por figura y partida; si está desactivado, **todos** los cartones elegibles entran en el premio (inmediato: cada uno cobra el monto completo; diferido: todos entran en el reparto al cierre) |
-| Ganador único | Primer cartón elegible en orden de desempate (`createdAt`, `cardIndex`, `id`) |
+| Liquidación en wallet | **Siempre al cerrar la partida** (`settleDeferredSplitPrizesForRound` al pasar a `COMPLETED`). Durante el sorteo solo se registran ganadores en `DeferredRoundPrizeWin`; SSE `prize_awarded` lleva `deferredSettlement` y **sin** `amountCents`. |
+| `prizePayoutMode` (BO / `Bingo`) | Define **cómo** se reparte al cierre (no el momento): `IMMEDIATE_FULL_PER_WINNER` (default) = cada ganador cobra el **monto completo** del premio; `DEFERRED_SPLIT_AT_ROUND_END` = el monto configurado por figura se **divide** entre todos los ganadores de esa figura en la partida. |
+| `uniquePerRound` (BO) | Por premio: si está activo (default), la figura se paga **una vez** por partida (primera bolilla en que alguien la cumple). Varios cartones en **esa misma bolilla**: todos entran al reparto al cierre. Quien la cumple después no entra. Si está desactivado, cada cartón elegible entra al liquidar al cierre. |
+| Desempate en reparto | Al dividir centavos del pozo (`DEFERRED_SPLIT_AT_ROUND_END`), orden `createdAt` → `cardIndex` → `id` para repartir el resto (+1 céntimo) |
 | Mismo cartón | Puede ganar varias figuras distintas a lo largo del sorteo |
 | Fin de partida | Cuando **cualquier** cartón completa FULL_HOUSE; premios menores no cortan el sorteo |
 | `minPlayersToStart` | Cuenta **cartones vendidos** (`PlayerRoundCard`), no jugadores únicos |
@@ -111,7 +125,7 @@ Implementación: `lib/bingo-round-kickoff.ts` + `live-session.ts` → `beginSche
 | Cupo insuficiente | `SCHEDULED` → `CANCELLED` (`MIN_CARTONS_NOT_MET`) + reembolso; **no** pasa por `DRAWING`; SSE `round_cancelled`. |
 | Cupo OK | `SCHEDULED` → `DRAWING` (atómico) y luego SSE `round_start` + bolillas. |
 
-Desempate en la misma bolilla: gana el cartón con mejor posición en el orden anterior (típicamente el comprado antes).
+Con `uniquePerRound`, la misma bolilla no excluye a nadie: todos los cartones que completan la figura en esa bolilla entran. El desempate por compra solo ordena el reparto de céntimos sobrantes al liquidar en modo diferido.
 
 ---
 

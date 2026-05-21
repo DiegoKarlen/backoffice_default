@@ -97,7 +97,7 @@ function parseWalletTxQueryDateTo(s: string): Date | null {
   return dt;
 }
 
-/** Ledger de wallet (mismo shape que `/player/wallet/transactions`; orden cronológico para auditoría). */
+/** Ledger de wallet (mismo shape que `/player/wallet/transactions`; más reciente primero). */
 playersRouter.get("/:playerId/wallet/transactions", async (req: AuthedRequest, res) => {
   const parseId = uuidParam.safeParse(req.params.playerId);
   if (!parseId.success) {
@@ -138,7 +138,7 @@ playersRouter.get("/:playerId/wallet/transactions", async (req: AuthedRequest, r
   const payload = await listWalletTransactionsForPlayer({
     playerId,
     limit,
-    order: "asc",
+    order: "desc",
     createdAtFrom,
     createdAtTo,
   });

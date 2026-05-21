@@ -1,5 +1,6 @@
+import { PrizePayoutMode } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { decimalPriceToCents } from "../lib/money.js";
+import { computePrizePayoutCents, computeRoundPrizePoolCents } from "../lib/bingo-prize-pool.js";
 import { compareCardsForTieBreak } from "../game-engine/bingo/bingo-75/prize-winner-order.js";
 import { creditPrizeAmountWithTx } from "./prize-payout.js";
 
@@ -19,11 +20,19 @@ function splitPoolCents(pool: number, n: number): number[] {
 }
 
 /**
- * Acredita wallets según filas `DeferredRoundPrizeWin` de la partida: el monto configurado de cada
- * `BingoPrize` se divide en partes iguales entre todos los ganadores de esa figura en la ronda.
+ * Acredita wallets al cerrar la partida según filas `DeferredRoundPrizeWin`.
+ * - `IMMEDIATE_FULL_PER_WINNER`: cada ganador cobra el monto completo del premio.
+ * - `DEFERRED_SPLIT_AT_ROUND_END`: el monto del premio se reparte entre los ganadores de esa figura.
  * Idempotente si no quedan filas diferidas.
  */
 export async function settleDeferredSplitPrizesForRound(params: { bingoRoundId: string }): Promise<void> {
+  const round = await prisma.bingoRound.findUnique({
+    where: { id: params.bingoRoundId },
+    select: { bingo: { select: { prizePayoutMode: true, prizeMode: true } } },
+  });
+  const splitPool =
+    round?.bingo.prizePayoutMode === PrizePayoutMode.DEFERRED_SPLIT_AT_ROUND_END;
+
   await prisma.$transaction(async (tx) => {
     const wins = await tx.deferredRoundPrizeWin.findMany({
       where: { bingoRoundId: params.bingoRoundId },
@@ -35,6 +44,8 @@ export async function settleDeferredSplitPrizesForRound(params: { bingoRoundId: 
 
     if (!wins.length) return;
 
+    const roundPoolCents = await computeRoundPrizePoolCents(params.bingoRoundId, tx);
+
     const byPrize = new Map<string, typeof wins>();
     for (const w of wins) {
       const list = byPrize.get(w.bingoPrizeId);
@@ -44,11 +55,13 @@ export async function settleDeferredSplitPrizesForRound(params: { bingoRoundId: 
 
     for (const [, group] of byPrize) {
       const prize = group[0]!.bingoPrize;
-      const pool = decimalPriceToCents(prize.amount);
+      const pool = computePrizePayoutCents(round!.bingo.prizeMode, prize, roundPoolCents);
       const sorted = [...group].sort((a, b) =>
         compareCardsForTieBreak(a.playerRoundCard, b.playerRoundCard),
       );
-      const amounts = splitPoolCents(pool, sorted.length);
+      const amounts = splitPool
+        ? splitPoolCents(pool, sorted.length)
+        : sorted.map(() => pool);
 
       for (let i = 0; i < sorted.length; i++) {
         const w = sorted[i]!;
