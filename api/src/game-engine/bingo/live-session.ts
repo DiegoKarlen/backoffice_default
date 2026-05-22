@@ -20,6 +20,8 @@ import { refundCartonPurchasesForCancelledRound } from "../../services/round-can
 import { bingoPrizeDisplayAmount } from "../../lib/bingo-prize-display.js";
 import { settleDeferredSplitPrizesForRound } from "../../services/settle-deferred-split-prizes.js";
 import { ballCountForType, createBallQueue, getBingoEngine } from "./registry.js";
+import { liveSessionStore } from "./live-session-registry.js";
+import { LiveSessionBroadcaster } from "./live-broadcast.js";
 
 type Phase = "idle" | "drawing";
 
@@ -75,9 +77,7 @@ export type LiveSnapshot = {
   };
 };
 
-const sessions = new Map<string, BingoLiveSession>();
-
-class BingoLiveSession {
+export class BingoLiveSession {
   private phase: Phase = "idle";
   private drawTimer: ReturnType<typeof setTimeout> | null = null;
   private roundIntroTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -103,7 +103,7 @@ class BingoLiveSession {
   private currentRoundId: string | null = null;
   private currentRoundSequence: number | null = null;
 
-  private sseClients = new Set<SseClient>();
+  private readonly broadcaster = new LiveSessionBroadcaster();
 
   constructor(
     private readonly roomId: string,
@@ -220,19 +220,8 @@ class BingoLiveSession {
     };
   }
 
-  private sseWrite(res: Response, event: string, data: unknown): void {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  }
-
   private broadcast(event: string, data: unknown): void {
-    const line = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of this.sseClients) {
-      try {
-        res.write(line);
-      } catch {
-        this.sseClients.delete(res);
-      }
-    }
+    this.broadcaster.broadcast(event, data);
   }
 
   private async refreshFollowingKick(afterStartsAtMs: number): Promise<void> {
@@ -533,7 +522,7 @@ class BingoLiveSession {
         })
         .catch(console.error);
     }
-    this.broadcast("ball", {
+    this.broadcaster.broadcastBallDrawn(ball, {
       ball,
       drawn: [...this.drawn],
       remainingInQueue:
@@ -707,38 +696,25 @@ class BingoLiveSession {
   }
 
   attachSse(req: Request, res: Response): void {
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders?.();
-
-    this.sseClients.add(res);
-    this.sseWrite(res, "state", this.getSnapshot());
-
-    const onClose = () => {
-      this.sseClients.delete(res);
-      req.off("close", onClose);
-    };
-    req.on("close", onClose);
+    this.broadcaster.attach(req, res, this.getSnapshot());
   }
 }
 
 export function registerLiveSession(room: { id: string; slug: string; name: string }): BingoLiveSession {
-  let s = sessions.get(room.id);
+  let s = liveSessionStore.get(room.id);
   if (s) return s;
   s = new BingoLiveSession(room.id, room.slug, room.name);
-  sessions.set(room.id, s);
+  liveSessionStore.set(room.id, s);
   s.bootstrap();
   return s;
 }
 
 export function getLiveSession(roomId: string): BingoLiveSession | undefined {
-  return sessions.get(roomId);
+  return liveSessionStore.get(roomId);
 }
 
 export async function ensureLiveSessionForRoom(roomId: string): Promise<BingoLiveSession> {
-  let s = sessions.get(roomId);
+  let s = liveSessionStore.get(roomId);
   if (s) return s;
   const room = await prisma.room.findUnique({ where: { id: roomId } });
   if (!room) throw new Error("Room not found");
@@ -746,7 +722,7 @@ export async function ensureLiveSessionForRoom(roomId: string): Promise<BingoLiv
 }
 
 export function rescheduleLiveSessionForRoom(roomId: string): void {
-  const s = sessions.get(roomId);
+  const s = liveSessionStore.get(roomId);
   if (!s) return;
   s.refreshIdleSchedule();
 }
@@ -755,15 +731,11 @@ export async function registerDrawnBallForRoom(
   roomId: string,
   ballNumber: number,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  const session = sessions.get(roomId);
+  const session = liveSessionStore.get(roomId);
   if (!session) {
     return { ok: false, status: 404, error: "Live session not found for room" };
   }
   return session.registerDrawnBall(ballNumber);
 }
 
-void prisma.room.findMany().then((rooms) => {
-  for (const r of rooms) {
-    registerLiveSession(r);
-  }
-});
+export { liveSessionStore, type LiveSessionStore } from "./live-session-registry.js";

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   allocateWithUniqueFingerprint,
   DuplicateFingerprintError,
-} from "./allocate-unique-fingerprint.js";
+} from "../../../src/lib/allocate-unique-fingerprint.js";
 
 describe("allocateWithUniqueFingerprint", () => {
   it("returns first value when fingerprint is free", async () => {

@@ -11,7 +11,7 @@ import {
   winsLine,
   winsPerimeter,
   type Bingo75Cell,
-} from "./figures.js";
+} from "../../../../src/game-engine/bingo/bingo-75/figures.js";
 
 function cell(row: number, col: number, number: number | null, isFree = false): Bingo75Cell {
   return { row, col, number, isFree };

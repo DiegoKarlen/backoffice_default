@@ -1,4 +1,5 @@
 import { publicBingosPath } from "./config.js";
+import { ensureDisplayOperatorAuth, liveDrawRequestHeaders } from "./live-auth.js";
 
 export type BingoFigure =
   | "LINE"
@@ -67,12 +68,13 @@ export type LiveSnapshot = {
   };
 };
 
-/** Bingo Live: marca bola sorteada (público, sin auth por ahora). */
+/** Bingo Live: marca bola sorteada (requiere auth salvo `LIVE_DRAW_AUTH_OPTIONAL` en API). */
 export async function postDrawBall(number: number): Promise<void> {
+  await ensureDisplayOperatorAuth();
   const url = publicBingosPath("/live/draw-ball");
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: liveDrawRequestHeaders(),
     body: JSON.stringify({ number }),
   });
   if (!res.ok) {

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { computePrizePayoutCents, computeRoundPrizePoolCents } from "../lib/bingo-prize-pool.js";
+import { applyWalletDelta, lockWalletForPlayer } from "./wallet-ledger.js";
 
 export type PrizeCreditResult = {
   payoutId: string;
@@ -42,16 +43,8 @@ export async function creditPrizeAmountWithTx(
     throw new Error("amountCents must be a positive integer");
   }
 
-  await tx.wallet.upsert({
-    where: { playerId: params.playerId },
-    create: { playerId: params.playerId, balanceCents: 0, currencyCode: "ARS" },
-    update: {},
-  });
-
-  await tx.$executeRawUnsafe(`SELECT id FROM "Wallet" WHERE "playerId" = $1 FOR UPDATE`, params.playerId);
-
-  const wallet = await tx.wallet.findUniqueOrThrow({ where: { playerId: params.playerId } });
-  const newBalance = wallet.balanceCents + amountCents;
+  const wallet = await lockWalletForPlayer(tx, params.playerId);
+  const { newBalanceCents: newBalance } = await applyWalletDelta(tx, wallet, amountCents);
 
   const payout = await tx.prizePayout.create({
     data: {
@@ -70,11 +63,6 @@ export async function creditPrizeAmountWithTx(
       balanceAfterCents: newBalance,
       prizePayoutId: payout.id,
     },
-  });
-
-  await tx.wallet.update({
-    where: { id: wallet.id },
-    data: { balanceCents: newBalance },
   });
 
   return { payoutId: payout.id, transactionId: wt.id, balanceCents: newBalance };

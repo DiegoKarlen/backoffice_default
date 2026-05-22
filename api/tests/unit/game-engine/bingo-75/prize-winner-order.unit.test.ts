@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { compareCardsForTieBreak, sortCardsForTieBreak } from "./prize-winner-order.js";
+import { compareCardsForTieBreak, sortCardsForTieBreak } from "../../../../src/game-engine/bingo/bingo-75/prize-winner-order.js";
 
 describe("compareCardsForTieBreak", () => {
   it("prefers earlier purchase time", () => {

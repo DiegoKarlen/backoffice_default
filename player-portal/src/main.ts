@@ -1,118 +1,19 @@
 import "./style.css";
+import { connectSseWithReconnect, escapeHtml, formatDecimalPrice, formatMoneyFromCents } from "@shared/index.ts";
+import { API_BASE, apiJson, publicJson } from "./lib/api.js";
+import { el } from "./lib/dom.js";
+import { formatWhen, friendlyError } from "./lib/format.js";
+import {
+  PP_TAB_KEY,
+  consumeAuthExpiredFlash,
+  getToken,
+  isSessionHandledError,
+  setAuthExpiredFlash,
+  setSessionExpiredHandler,
+  setToken,
+} from "./lib/session.js";
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined)?.trim().replace(/\/$/, "") ??
-  "http://localhost:4001";
-
-const PP_TAB_KEY = "pp_active_tab";
-const PP_AUTH_FLASH_KEY = "pp_auth_flash";
-
-function setAuthExpiredFlash(text: string): void {
-  try {
-    sessionStorage.setItem(PP_AUTH_FLASH_KEY, text);
-  } catch {
-    /* ignore */
-  }
-}
-
-function consumeAuthExpiredFlash(): string | null {
-  try {
-    const v = sessionStorage.getItem(PP_AUTH_FLASH_KEY);
-    if (v) {
-      sessionStorage.removeItem(PP_AUTH_FLASH_KEY);
-      return v;
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-/** 401 en petición autenticada: limpia sesión, mensaje en login y vuelve a invitado. */
-function handleSessionExpiredFromApi(): void {
-  setToken(null);
-  try {
-    sessionStorage.removeItem(PP_TAB_KEY);
-  } catch {
-    /* ignore */
-  }
-  setAuthExpiredFlash("Tu sesión expiró o no es válida. Iniciá sesión de nuevo.");
-  disconnectLiveStreams?.();
-  disconnectLiveStreams = null;
-  render();
-}
-
-function isSessionHandledError(err: unknown): boolean {
-  return (
-    err instanceof Error && (err as Error & { sessionHandled?: boolean }).sessionHandled === true
-  );
-}
-
-/** Un único nodo raíz; si el HTML tiene varios, solo el primero se inserta. */
-function el(html: string): HTMLElement {
-  const t = document.createElement("template");
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild as HTMLElement;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/** Solo montos legibles para el jugador (API sigue en centavos). */
-function formatMoney(cents: number, currencyCode: string): string {
-  const v = cents / 100;
-  return `${v.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`;
-}
-
-/** Precio decimal de agenda pública (ej. `cardPrice` del upcoming) → mismo formato que wallet. */
-function formatDecimalPrice(price: string, currencyCode: string): string {
-  const trimmed = price.trim();
-  if (!trimmed) return "—";
-  const n = Number(trimmed.replace(",", "."));
-  if (!Number.isFinite(n) || n < 0) return trimmed;
-  return formatMoney(Math.round(n * 100), currencyCode);
-}
-
-function formatWhen(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString("es-AR", {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-/** Mensajes API en inglés → texto útil para el jugador (portal en español). */
-function translatePlayerApiError(message: string): string {
-  const pairs: Array<[string, string]> = [
-    ["Insufficient balance", "Saldo insuficiente para esta compra."],
-    ["Round is not open for purchases", "Esta partida ya no admite compras."],
-    ["Bingo is not active", "El bingo no está activo."],
-    ["Only BINGO_75 carton purchase is implemented", "Solo se pueden comprar cartones en bingos tipo 75."],
-    ["quantity must be between", "Cantidad no válida (debe ser entre 1 y 99)."],
-    ["Round not found", "Partida no encontrada."],
-    ["Player not found", "Jugador no encontrado."],
-    ["Player is inactive", "Tu cuenta está desactivada."],
-    ["Invalid credentials", "Email o contraseña incorrectos."],
-    ["Unauthorized", "No autorizado. Iniciá sesión de nuevo."],
-    ["Email or username already registered", "Ese email o usuario ya está registrado."],
-  ];
-  for (const [en, es] of pairs) {
-    if (message.includes(en)) return es;
-  }
-  return message;
-}
+const formatMoney = formatMoneyFromCents;
 
 type TxDetail = {
   kind: "prize" | "purchase" | "deposit" | "refund" | "adjustment" | null;
@@ -156,6 +57,12 @@ type PpTab = "buy" | "cards" | "tx";
 
 let disconnectLiveStreams: (() => void) | null = null;
 
+setSessionExpiredHandler(() => {
+  disconnectLiveStreams?.();
+  disconnectLiveStreams = null;
+  render();
+});
+
 function uniqueRoomSlugsFromCards(cards: MyCardRow[]): string[] {
   const slugs = cards.map((c) => c.round.roomSlug).filter((s): s is string => !!s && s.trim().length > 0);
   return [...new Set(slugs)];
@@ -192,68 +99,6 @@ function cardCaptionHtml(card: MyCardRow, liveByRoom: Map<string, LiveSnap>): st
     : "";
   const cap = `${escapeHtml(card.round.bingoName)} · Partida #${card.round.sequence} · ${formatWhen(card.round.startsAt)} · Cartón ${card.cardIndex + 1}`;
   return `<p class="pp-card-caption">${cap}${liveTag}</p>`;
-}
-
-function getToken(): string | null {
-  return sessionStorage.getItem("player_token");
-}
-
-function setToken(t: string | null): void {
-  if (t) sessionStorage.setItem("player_token", t);
-  else sessionStorage.removeItem("player_token");
-}
-
-async function apiJson(path: string, options: RequestInit = {}): Promise<unknown> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
-  const tok = getToken();
-  const hadAuthHeader = !!tok;
-  if (tok) headers.Authorization = `Bearer ${tok}`;
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const text = await res.text();
-  let data: unknown = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
-  }
-  if (!res.ok) {
-    if (res.status === 401 && hadAuthHeader) {
-      handleSessionExpiredFromApi();
-      const e = new Error(
-        typeof (data as { error?: string })?.error === "string"
-          ? (data as { error: string }).error
-          : "Unauthorized",
-      ) as Error & { status?: number; sessionHandled?: boolean };
-      e.status = 401;
-      e.sessionHandled = true;
-      throw e;
-    }
-    const err = (data as { error?: string })?.error ?? res.statusText;
-    const raw = typeof err === "string" ? err : JSON.stringify(err);
-    const e = new Error(raw) as Error & { status?: number };
-    e.status = res.status;
-    throw e;
-  }
-  return data;
-}
-
-async function publicJson(path: string): Promise<unknown> {
-  const res = await fetch(`${API_BASE}${path}`);
-  const text = await res.text();
-  let data: unknown = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
-  }
-  if (!res.ok) {
-    const err = (data as { error?: string })?.error ?? res.statusText;
-    throw new Error(typeof err === "string" ? err : JSON.stringify(err));
-  }
-  return data;
 }
 
 type RoomOpt = { id: string; name: string; slug: string };
@@ -336,14 +181,6 @@ function renderLoggedShell(root: HTMLElement): void {
     }
     render();
   });
-}
-
-function friendlyError(err: unknown): string {
-  if (!(err instanceof Error)) return "Error desconocido.";
-  if (err.message === "Failed to fetch") {
-    return "No se pudo conectar con el servidor. Comprobá que la API esté en marcha.";
-  }
-  return translatePlayerApiError(err.message);
 }
 
 function renderTxList(transactions: Array<Record<string, unknown>>, currency: string): string {
@@ -516,7 +353,7 @@ async function mountDashboard(root: HTMLElement, msg: HTMLElement | null): Promi
   disconnectLiveStreams?.();
 
   const liveSnapshots = new Map<string, LiveSnap>();
-  const liveSources = new Map<string, EventSource>();
+  const liveSources = new Map<string, () => void>();
   let latestCards: MyCardRow[] = [];
 
   const panel = root.querySelector("#panel-logged") as HTMLElement | null;
@@ -548,22 +385,20 @@ async function mountDashboard(root: HTMLElement, msg: HTMLElement | null): Promi
     for (const slug of slugs) {
       if (liveSources.has(slug)) continue;
       const url = `${API_BASE}/public/bingos/live/events?roomSlug=${encodeURIComponent(slug)}`;
-      const es = new EventSource(url);
-      es.addEventListener("state", (ev) => {
-        try {
-          const data = JSON.parse((ev as MessageEvent<string>).data) as LiveSnap;
-          liveSnapshots.set(slug, data);
-          paintMyCardsHost();
-        } catch {
-          /* ignore */
-        }
+      const disconnect = connectSseWithReconnect({
+        url,
+        listeners: {
+          state: (data) => {
+            liveSnapshots.set(slug, data as LiveSnap);
+            paintMyCardsHost();
+          },
+        },
       });
-      es.addEventListener("error", () => {});
-      liveSources.set(slug, es);
+      liveSources.set(slug, disconnect);
     }
-    for (const [slug, es] of [...liveSources.entries()]) {
+    for (const [slug, disconnect] of [...liveSources.entries()]) {
       if (!slugs.includes(slug)) {
-        es.close();
+        disconnect();
         liveSources.delete(slug);
         liveSnapshots.delete(slug);
       }
@@ -571,7 +406,7 @@ async function mountDashboard(root: HTMLElement, msg: HTMLElement | null): Promi
   }
 
   disconnectLiveStreams = () => {
-    for (const es of liveSources.values()) es.close();
+    for (const disconnect of liveSources.values()) disconnect();
     liveSources.clear();
     liveSnapshots.clear();
   };

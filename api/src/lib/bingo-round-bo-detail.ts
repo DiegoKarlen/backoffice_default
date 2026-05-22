@@ -3,23 +3,10 @@ import {
   figureHighlightSlotsByDrawOrder,
   type Bingo75Cell,
 } from "../game-engine/bingo/bingo-75/figures.js";
+import { cellsToGrid5, type CardGridCell } from "./bingo-card-grid.js";
 import { prisma } from "./prisma.js";
 
-export type CardGridCell = { number: number | null; isFree: boolean };
-
-function cellsToGrid5(
-  cells: { row: number; col: number; number: number | null; isFree: boolean }[],
-): CardGridCell[][] {
-  const grid: CardGridCell[][] = Array.from({ length: 5 }, () =>
-    Array.from({ length: 5 }, () => ({ number: null as number | null, isFree: false })),
-  );
-  for (const c of cells) {
-    if (c.row >= 0 && c.row < 5 && c.col >= 0 && c.col < 5) {
-      grid[c.row]![c.col] = { number: c.number, isFree: c.isFree };
-    }
-  }
-  return grid;
-}
+export type { CardGridCell };
 
 async function assertRoundBelongsToBingo(bingoId: string, roundId: string) {
   const round = await prisma.bingoRound.findFirst({
@@ -56,7 +43,7 @@ export async function getRoundPurchasedCardsForBo(params: {
         prizes: RoundCardPrizeBo[];
       }>;
     }
-  | { ok: false; status: 404; error: string }
+  | { ok: false; status: 404 | 422; error: string }
 > {
   const round = await assertRoundBelongsToBingo(params.bingoId, params.roundId);
   if (!round) {

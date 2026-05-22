@@ -1,706 +1,255 @@
 import { Router } from "express";
-import { z } from "zod";
+import { BingoStatus, BingoType, Prisma } from "@prisma/client";
 import {
-  BingoDrawMode,
-  BingoFigure,
   BingoPrizeMode,
-  BingoRoundStatus,
-  BingoStatus,
-  BingoType,
-  Prisma,
-  PrizePayoutMode,
-  RoomStatus,
-} from "@prisma/client";
-import { rescheduleLiveSessionForRoom } from "../game-engine/bingo/live-session.js";
-import { syncScheduledRoundsForBingo } from "../lib/bingo-rounds-sync.js";
+  createBingo,
+  deleteBingo,
+  getBingoById,
+  listBingos,
+  setBingoStatus,
+  updateBingo,
+  validateBingo,
+  validatePrizes,
+  validateScheduleBounds,
+} from "../lib/bingo/bingo-crud.service.js";
+import { createBingoSchema, updateBingoSchema } from "../lib/bingo/bingo-schemas.js";
+import { toDecimalString } from "../lib/bingo/bingo-serializer.js";
 import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
-import { getRoundPrizesForBo, getRoundPurchasedCardsForBo } from "../lib/bingo-round-bo-detail.js";
 import { prisma } from "../lib/prisma.js";
 import { type AuthedRequest, requireAuth } from "../middleware/auth.js";
+import { attachBingoRoundRoutes } from "./bingo-rounds.js";
 
 export const bingosRouter = Router();
 bingosRouter.use(requireAuth);
 
-function toDecimalString(v: unknown): string {
-  if (v === null || v === undefined) return "0";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" && Number.isFinite(v)) return String(v);
-  return String(v);
-}
-
-function serializeBingo(b: {
-  id: string;
-  roomId: string;
-  name: string;
-  status: BingoStatus;
-  bingoType: BingoType;
-  prizePayoutMode: PrizePayoutMode;
-  drawMode: BingoDrawMode;
-  startDateTime: Date;
-  endDateTime: Date | null;
-  repeatEveryMinutes: number | null;
-  cardPrice: Prisma.Decimal;
-  prizeMode: BingoPrizeMode;
-  prizePoolSeed: Prisma.Decimal;
-  minPlayersToStart: number;
-  createdAt: Date;
-  updatedAt: Date;
-  room?: { id: string; name: string; status: RoomStatus };
-  prizes?: {
-    id: string;
-    bingoId: string;
-    figure: BingoFigure;
-    amount: Prisma.Decimal;
-    uniquePerRound: boolean;
-  }[];
-}) {
-  return {
-    id: b.id,
-    roomId: b.roomId,
-    room: b.room ? { id: b.room.id, name: b.room.name, status: b.room.status } : undefined,
-    name: b.name,
-    status: b.status,
-    bingoType: b.bingoType,
-    prizePayoutMode: b.prizePayoutMode,
-    drawMode: b.drawMode,
-    startDateTime: b.startDateTime,
-    endDateTime: b.endDateTime,
-    repeatEveryMinutes: b.repeatEveryMinutes,
-    cardPrice: b.cardPrice.toString(),
-    prizeMode: b.prizeMode,
-    prizePoolSeed: b.prizePoolSeed.toString(),
-    minPlayersToStart: b.minPlayersToStart,
-    createdAt: b.createdAt,
-    updatedAt: b.updatedAt,
-    prizes: b.prizes
-      ? b.prizes.map((p) => ({
-          id: p.id,
-          bingoId: p.bingoId,
-          figure: p.figure,
-          amount: p.amount.toString(),
-          uniquePerRound: p.uniquePerRound,
-        }))
-      : undefined,
-  };
-}
-
-const prizeSchema = z.object({
-  figure: z.nativeEnum(BingoFigure),
-  amount: z.union([z.string(), z.number()]),
-  uniquePerRound: z.boolean().optional().default(true),
+bingosRouter.get("/upcoming", async (req: AuthedRequest, res, next) => {
+  try {
+    const payload = await buildUpcomingPayload(req.query);
+    res.json(payload);
+  } catch (e) {
+    next(e);
+  }
 });
 
-const baseBody = z.object({
-  roomId: z.string().min(1),
-  name: z.string().min(1).max(200),
-  status: z.nativeEnum(BingoStatus).optional(),
-  bingoType: z.nativeEnum(BingoType),
-  startDateTime: z.string().datetime(),
-  endDateTime: z.union([z.string().datetime(), z.null()]).optional(),
-  repeatEveryMinutes: z.number().int().min(1).max(10_080).optional().nullable(),
-  cardPrice: z.union([z.string(), z.number()]),
-  prizeMode: z.nativeEnum(BingoPrizeMode).optional(),
-  prizePoolSeed: z.union([z.string(), z.number()]).optional(),
-  minPlayersToStart: z.number().int().min(1).max(100_000).default(2),
-  prizePayoutMode: z.nativeEnum(PrizePayoutMode).optional(),
-  drawMode: z.nativeEnum(BingoDrawMode).optional(),
-  prizes: z.array(prizeSchema).min(1),
-});
+bingosRouter.get("/", async (req: AuthedRequest, res, next) => {
+  try {
+    const q = req.query;
+    const name = typeof q.name === "string" ? q.name.trim() : "";
+    const status = typeof q.status === "string" ? q.status : "";
+    const bingoType = typeof q.bingoType === "string" ? q.bingoType : "";
+    const roomId = typeof q.roomId === "string" ? q.roomId.trim() : "";
+    const roomName = typeof q.roomName === "string" ? q.roomName.trim() : "";
 
-/** Alta: fin de ciclo y repetición obligatorios (formulario backoffice completo). */
-const createSchema = baseBody.extend({
-  endDateTime: z.string().datetime(),
-  repeatEveryMinutes: z.number().int().min(1).max(10_080),
-});
-const updateSchema = baseBody.partial().extend({
-  roomId: z.string().min(1).optional(),
-  prizes: z.array(prizeSchema).min(1).optional(),
-});
-
-type PrizeBody = z.infer<typeof prizeSchema>;
-
-function prizeRowDbData(p: PrizeBody): { amount: string; uniquePerRound: boolean } {
-  return {
-    amount: toDecimalString(p.amount),
-    uniquePerRound: p.uniquePerRound ?? true,
-  };
-}
-
-function validatePrizes(
-  prizes: PrizeBody[],
-  prizeMode: BingoPrizeMode,
-  prizePoolSeed?: unknown,
-): string | null {
-  if (!prizes.length) return "At least one prize is required";
-  const seen = new Set<string>();
-  for (const p of prizes) {
-    const key = String(p.figure);
-    if (seen.has(key)) return `Duplicate prize figure: ${key}`;
-    seen.add(key);
-    const n = Number(toDecimalString(p.amount));
-    if (!Number.isFinite(n) || n <= 0) {
-      return prizeMode === BingoPrizeMode.PERCENTAGE
-        ? `Prize percent must be a positive number (${key})`
-        : `Prize amount must be a positive number (${key})`;
+    const where: Prisma.BingoWhereInput = {};
+    if (name) where.name = { contains: name, mode: "insensitive" };
+    if (roomId) where.roomId = roomId;
+    if (roomName) {
+      where.room = { name: { contains: roomName, mode: "insensitive" } };
     }
-    if (prizeMode === BingoPrizeMode.PERCENTAGE && n > 100) {
-      return `Prize percent must be at most 100 (${key})`;
+    if (status && Object.values(BingoStatus).includes(status as BingoStatus)) {
+      where.status = status as BingoStatus;
     }
-  }
-  if (prizeMode === BingoPrizeMode.PERCENTAGE) {
-    const seed = Number(toDecimalString(prizePoolSeed ?? 0));
-    if (!Number.isFinite(seed) || seed < 0) {
-      return "prizePoolSeed must be a non-negative number when prize mode is PERCENTAGE";
+    if (bingoType && Object.values(BingoType).includes(bingoType as BingoType)) {
+      where.bingoType = bingoType as BingoType;
     }
-  }
-  return null;
-}
 
-function prizeAmountDiffers(existing: { amount: Prisma.Decimal }, incomingAmount: string): boolean {
-  return !existing.amount.equals(new Prisma.Decimal(incomingAmount));
-}
-
-function validateScheduleBounds(start: Date, end: Date | null | undefined): string | null {
-  if (end != null && end.getTime() < start.getTime()) {
-    return "endDateTime must be on or after startDateTime";
+    res.json({ bingos: await listBingos(where) });
+  } catch (e) {
+    next(e);
   }
-  return null;
-}
-
-/**
- * Sincroniza premios sin borrar filas con historial (`PrizePayout` / `DeferredRoundPrizeWin`).
- * - No elimina una figura si tiene pagos o diferidos pendientes.
- * - No cambia el **monto** (`amount`) de una figura que ya tenga **`PrizePayout`** (acreditación hecha).
- *   Las filas `PrizePayout` / `amountCents` no se modifican; la plantilla tampoco puede cambiar de monto en ese caso.
- *   Si solo hay **`DeferredRoundPrizeWin`** pendiente (aún no liquidado), sí se permite ajustar el monto para las partidas futuras / liquidación pendiente.
- */
-async function syncBingoPrizesInUpdateTx(
-  tx: Prisma.TransactionClient,
-  bingoId: string,
-  prizes: PrizeBody[],
-): Promise<void> {
-  const incomingFigures = prizes.map((p) => p.figure);
-  const orphans = await tx.bingoPrize.findMany({
-    where: { bingoId, figure: { notIn: incomingFigures } },
-    select: {
-      id: true,
-      figure: true,
-      _count: { select: { payouts: true, deferredWins: true } },
-    },
-  });
-  for (const r of orphans) {
-    if (r._count.payouts > 0 || r._count.deferredWins > 0) {
-      const err = new Error(
-        `Cannot remove prize figure ${r.figure}: payouts or pending deferred wins are linked to this prize.`,
-      );
-      err.name = "PrizeRemoveBlocked";
-      throw err;
-    }
-  }
-  for (const r of orphans) {
-    await tx.bingoPrize.delete({ where: { id: r.id } });
-  }
-
-  for (const p of prizes) {
-    const existing = await tx.bingoPrize.findUnique({
-      where: { bingoId_figure: { bingoId, figure: p.figure } },
-      include: { _count: { select: { payouts: true, deferredWins: true } } },
-    });
-    const row = prizeRowDbData(p);
-    if (existing) {
-      const hasPaidPayouts = existing._count.payouts > 0;
-      if (hasPaidPayouts && prizeAmountDiffers(existing, row.amount)) {
-        const err = new Error(
-          `Cannot change the prize amount for figure ${p.figure}: there are already recorded prize payouts (credited amounts) for this prize. Those credits are immutable; you can still update "unique per round" or leave the amount unchanged.`,
-        );
-        err.name = "PrizeAmountLocked";
-        throw err;
-      }
-      await tx.bingoPrize.update({
-        where: { id: existing.id },
-        data: row,
-      });
-    } else {
-      await tx.bingoPrize.create({
-        data: {
-          bingoId,
-          figure: p.figure,
-          ...row,
-        },
-      });
-    }
-  }
-}
-
-function validateBingo(body: {
-  repeatEveryMinutes?: number | null;
-  cardPrice?: unknown;
-  minPlayersToStart?: number;
-}): string | null {
-  if (body.repeatEveryMinutes != null && body.repeatEveryMinutes < 1) {
-    return "repeatEveryMinutes must be >= 1";
-  }
-  if (body.cardPrice !== undefined) {
-    const n = Number(toDecimalString(body.cardPrice));
-    if (!Number.isFinite(n) || n <= 0) return "cardPrice must be a positive number";
-  }
-  if (body.minPlayersToStart !== undefined && body.minPlayersToStart < 1) {
-    return "minPlayersToStart must be >= 1";
-  }
-  return null;
-}
-
-bingosRouter.get("/upcoming", async (req: AuthedRequest, res) => {
-  const payload = await buildUpcomingPayload(req.query);
-  res.json(payload);
 });
 
-bingosRouter.get("/", async (req: AuthedRequest, res) => {
-  const q = req.query;
-  const name = typeof q.name === "string" ? q.name.trim() : "";
-  const status = typeof q.status === "string" ? q.status : "";
-  const bingoType = typeof q.bingoType === "string" ? q.bingoType : "";
-  const roomId = typeof q.roomId === "string" ? q.roomId.trim() : "";
-  const roomName = typeof q.roomName === "string" ? q.roomName.trim() : "";
+attachBingoRoundRoutes(bingosRouter);
 
-  const where: Prisma.BingoWhereInput = {};
-  if (name) where.name = { contains: name, mode: "insensitive" };
-  if (roomId) where.roomId = roomId;
-  if (roomName) {
-    where.room = { name: { contains: roomName, mode: "insensitive" } };
-  }
-  if (status && Object.values(BingoStatus).includes(status as BingoStatus)) {
-    where.status = status as BingoStatus;
-  }
-  if (bingoType && Object.values(BingoType).includes(bingoType as BingoType)) {
-    where.bingoType = bingoType as BingoType;
-  }
-
-  const list = await prisma.bingo.findMany({
-    where,
-    orderBy: [{ startDateTime: "asc" }, { name: "asc" }],
-    include: { prizes: { orderBy: { figure: "asc" } }, room: true },
-  });
-
-  res.json({ bingos: list.map((b) => serializeBingo(b)) });
-});
-
-/**
- * Partidas del bingo (bolas ordenadas por extracción cuando hay datos persistidos).
- * Query opcional: `from`, `to` (ISO datetime), `sequence`, `status` (un estado),
- * `finishedOnly` (`true`|`1`) → `COMPLETED` y `CANCELLED` (útil listado backoffice),
- * `limit` (1–500), `sort` (`asc`|`desc`, por `startsAt`).
- */
-bingosRouter.get("/:id/rounds", async (req: AuthedRequest, res) => {
-  const { id } = req.params;
-  const bingo = await prisma.bingo.findFirst({
-    where: { id },
-    select: { id: true, name: true },
-  });
-  if (!bingo) {
-    res.status(404).json({ error: "Bingo not found" });
-    return;
-  }
-
-  const q = req.query;
-  const fromRaw = typeof q.from === "string" ? q.from.trim() : "";
-  const toRaw = typeof q.to === "string" ? q.to.trim() : "";
-  const seqRaw = typeof q.sequence === "string" ? q.sequence.trim() : "";
-  const statusRaw = typeof q.status === "string" ? q.status.trim() : "";
-  const finishedOnlyRaw = typeof q.finishedOnly === "string" ? q.finishedOnly.trim().toLowerCase() : "";
-  const finishedOnly = finishedOnlyRaw === "true" || finishedOnlyRaw === "1";
-  const limitRaw = typeof q.limit === "string" ? q.limit.trim() : "";
-  const sortRaw = typeof q.sort === "string" ? q.sort.trim().toLowerCase() : "";
-
-  const startsAtWhere: Prisma.DateTimeFilter = {};
-  if (fromRaw) {
-    const d = new Date(fromRaw);
-    if (Number.isNaN(d.getTime())) {
-      res.status(400).json({ error: "Invalid from datetime (use ISO 8601)" });
+bingosRouter.get("/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const bingo = await getBingoById(req.params.id);
+    if (!bingo) {
+      res.status(404).json({ error: "Bingo not found" });
       return;
     }
-    startsAtWhere.gte = d;
+    res.json({ bingo });
+  } catch (e) {
+    next(e);
   }
-  if (toRaw) {
-    const d = new Date(toRaw);
-    if (Number.isNaN(d.getTime())) {
-      res.status(400).json({ error: "Invalid to datetime (use ISO 8601)" });
+});
+
+bingosRouter.post("/", async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = createBingoSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    startsAtWhere.lte = d;
-  }
+    const body = parsed.data;
 
-  const where: Prisma.BingoRoundWhereInput = { bingoId: id };
-  if (Object.keys(startsAtWhere).length > 0) {
-    where.startsAt = startsAtWhere;
-  }
-  if (seqRaw !== "") {
-    const n = Number(seqRaw);
-    if (!Number.isInteger(n) || n < 1) {
-      res.status(400).json({ error: "sequence must be a positive integer (round #)" });
+    const vErr = validateBingo(body);
+    if (vErr) {
+      res.status(400).json({ error: vErr });
       return;
     }
-    where.sequence = n;
-  }
-  if (statusRaw !== "") {
-    const allowedStatus = Object.values(BingoRoundStatus) as string[];
-    if (!allowedStatus.includes(statusRaw)) {
-      res.status(400).json({ error: "Invalid status" });
-      return;
-    }
-    where.status = statusRaw as BingoRoundStatus;
-  } else if (finishedOnly) {
-    where.status = { in: [BingoRoundStatus.COMPLETED, BingoRoundStatus.CANCELLED] };
-  }
-
-  let take: number | undefined;
-  if (limitRaw !== "") {
-    const n = Number(limitRaw);
-    if (!Number.isInteger(n) || n < 1 || n > 500) {
-      res.status(400).json({ error: "limit must be an integer between 1 and 500" });
-      return;
-    }
-    take = n;
-  }
-
-  if (sortRaw !== "" && sortRaw !== "asc" && sortRaw !== "desc") {
-    res.status(400).json({ error: "sort must be asc or desc" });
-    return;
-  }
-  /** Backoffice: por defecto más reciente primero (startsAt / sequence desc). */
-  const orderDir = sortRaw === "asc" ? "asc" : "desc";
-
-  const rounds = await prisma.bingoRound.findMany({
-    where,
-    orderBy: [{ startsAt: orderDir }, { sequence: orderDir }],
-    ...(take != null ? { take } : {}),
-    include: {
-      balls: { orderBy: { drawOrder: "asc" }, select: { number: true } },
-      _count: { select: { playerRoundCards: true } },
-    },
-  });
-
-  const roundIds = rounds.map((r) => r.id);
-  const prizeCountByRound = new Map<string, number>();
-  if (roundIds.length > 0) {
-    const payouts = await prisma.prizePayout.findMany({
-      where: { playerRoundCard: { bingoRoundId: { in: roundIds } } },
-      select: { playerRoundCard: { select: { bingoRoundId: true } } },
-    });
-    for (const p of payouts) {
-      const rid = p.playerRoundCard.bingoRoundId;
-      prizeCountByRound.set(rid, (prizeCountByRound.get(rid) ?? 0) + 1);
-    }
-  }
-
-  res.json({
-    bingoId: bingo.id,
-    bingoName: bingo.name,
-    rounds: rounds.map((r) => {
-      const nums = r.balls.map((b) => b.number);
-      const includeBalls =
-        r.status === BingoRoundStatus.COMPLETED ||
-        r.status === BingoRoundStatus.DRAWING ||
-        nums.length > 0;
-      return {
-        id: r.id,
-        sequence: r.sequence,
-        startsAt: r.startsAt.toISOString(),
-        status: r.status,
-        cancellationReason: r.cancellationReason ?? null,
-        balls: includeBalls ? nums : [],
-        cardsSold: r._count.playerRoundCards,
-        prizesPaid: prizeCountByRound.get(r.id) ?? 0,
-      };
-    }),
-  });
-});
-
-const roundIdParam = z.string().uuid();
-
-bingosRouter.get("/:id/rounds/:roundId/cards", async (req: AuthedRequest, res) => {
-  const bingoId = req.params.id;
-  const roundParsed = roundIdParam.safeParse(req.params.roundId);
-  if (!roundParsed.success) {
-    res.status(400).json({ error: "Invalid round id" });
-    return;
-  }
-  const result = await getRoundPurchasedCardsForBo({ bingoId, roundId: roundParsed.data });
-  if (!result.ok) {
-    res.status(result.status).json({ error: result.error });
-    return;
-  }
-  res.json(result);
-});
-
-bingosRouter.get("/:id/rounds/:roundId/prizes", async (req: AuthedRequest, res) => {
-  const bingoId = req.params.id;
-  const roundParsed = roundIdParam.safeParse(req.params.roundId);
-  if (!roundParsed.success) {
-    res.status(400).json({ error: "Invalid round id" });
-    return;
-  }
-  const result = await getRoundPrizesForBo({ bingoId, roundId: roundParsed.data });
-  if (!result.ok) {
-    res.status(result.status).json({ error: result.error });
-    return;
-  }
-  res.json(result);
-});
-
-bingosRouter.get("/:id", async (req: AuthedRequest, res) => {
-  const { id } = req.params;
-  const bingo = await prisma.bingo.findFirst({
-    where: { id },
-    include: { prizes: { orderBy: { figure: "asc" } }, room: true },
-  });
-  if (!bingo) {
-    res.status(404).json({ error: "Bingo not found" });
-    return;
-  }
-  res.json({ bingo: serializeBingo(bingo) });
-});
-
-bingosRouter.post("/", async (req: AuthedRequest, res) => {
-  const parsed = createSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  const body = parsed.data;
-
-  const vErr = validateBingo(body);
-  if (vErr) {
-    res.status(400).json({ error: vErr });
-    return;
-  }
-  const prizeMode = body.prizeMode ?? BingoPrizeMode.FIXED;
-  const pErr = validatePrizes(body.prizes, prizeMode, body.prizePoolSeed);
-  if (pErr) {
-    res.status(400).json({ error: pErr });
-    return;
-  }
-
-  const startDt = new Date(body.startDateTime);
-  const endDt = new Date(body.endDateTime);
-  const boundsErr = validateScheduleBounds(startDt, endDt);
-  if (boundsErr) {
-    res.status(400).json({ error: boundsErr });
-    return;
-  }
-
-  const roomRow = await prisma.room.findFirst({ where: { id: body.roomId } });
-  if (!roomRow) {
-    res.status(400).json({ error: "Room not found" });
-    return;
-  }
-
-  const userId = req.auth?.sub;
-
-  const created = await prisma.bingo.create({
-    data: {
-      roomId: body.roomId,
-      name: body.name.trim(),
-      status: body.status ?? BingoStatus.INACTIVE,
-      bingoType: body.bingoType,
-      startDateTime: startDt,
-      endDateTime: endDt,
-      repeatEveryMinutes: body.repeatEveryMinutes ?? null,
-      cardPrice: toDecimalString(body.cardPrice),
-      prizeMode,
-      prizePoolSeed:
-        prizeMode === BingoPrizeMode.PERCENTAGE
-          ? toDecimalString(body.prizePoolSeed ?? 0)
-          : "0",
-      minPlayersToStart: body.minPlayersToStart,
-      prizePayoutMode: body.prizePayoutMode ?? PrizePayoutMode.IMMEDIATE_FULL_PER_WINNER,
-      drawMode: body.drawMode ?? BingoDrawMode.VIRTUAL,
-      createdByUserId: userId ?? null,
-      updatedByUserId: userId ?? null,
-      prizes: {
-        create: body.prizes.map((p) => ({
-          figure: p.figure,
-          ...prizeRowDbData(p),
-        })),
-      },
-    },
-    include: { prizes: { orderBy: { figure: "asc" } }, room: true },
-  });
-
-  await syncScheduledRoundsForBingo(created.id);
-  rescheduleLiveSessionForRoom(created.roomId);
-
-  res.status(201).json({ bingo: serializeBingo(created) });
-});
-
-bingosRouter.put("/:id", async (req: AuthedRequest, res) => {
-  const { id } = req.params;
-  const parsed = updateSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  const body = parsed.data;
-
-  const existing = await prisma.bingo.findFirst({ where: { id } });
-  if (!existing) {
-    res.status(404).json({ error: "Bingo not found" });
-    return;
-  }
-
-  const vErr = validateBingo({
-    repeatEveryMinutes:
-      body.repeatEveryMinutes !== undefined ? body.repeatEveryMinutes : existing.repeatEveryMinutes,
-    cardPrice: body.cardPrice !== undefined ? body.cardPrice : existing.cardPrice,
-    minPlayersToStart:
-      body.minPlayersToStart !== undefined ? body.minPlayersToStart : existing.minPlayersToStart,
-  });
-  if (vErr) {
-    res.status(400).json({ error: vErr });
-    return;
-  }
-  const mergedPrizeMode = body.prizeMode ?? existing.prizeMode;
-  if (body.prizes !== undefined) {
-    const mergedSeed =
-      body.prizePoolSeed !== undefined ? body.prizePoolSeed : existing.prizePoolSeed.toString();
-    const pErr = validatePrizes(body.prizes, mergedPrizeMode, mergedSeed);
+    const prizeMode = body.prizeMode ?? BingoPrizeMode.FIXED;
+    const pErr = validatePrizes(body.prizes, prizeMode, body.prizePoolSeed);
     if (pErr) {
       res.status(400).json({ error: pErr });
       return;
     }
-  } else if (body.prizeMode === BingoPrizeMode.PERCENTAGE) {
-    const mergedSeed =
-      body.prizePoolSeed !== undefined ? body.prizePoolSeed : existing.prizePoolSeed.toString();
-    const seed = Number(toDecimalString(mergedSeed));
-    if (!Number.isFinite(seed) || seed < 0) {
-      res.status(400).json({ error: "prizePoolSeed must be a non-negative number when prize mode is PERCENTAGE" });
+
+    const boundsErr = validateScheduleBounds(
+      new Date(body.startDateTime),
+      new Date(body.endDateTime),
+    );
+    if (boundsErr) {
+      res.status(400).json({ error: boundsErr });
       return;
     }
-  }
 
-  const mergedStart = body.startDateTime !== undefined ? new Date(body.startDateTime) : existing.startDateTime;
-  const mergedEnd =
-    body.endDateTime !== undefined
-      ? body.endDateTime === null
-        ? null
-        : new Date(body.endDateTime)
-      : existing.endDateTime;
-  const boundsErr = validateScheduleBounds(mergedStart, mergedEnd);
-  if (boundsErr) {
-    res.status(400).json({ error: boundsErr });
-    return;
-  }
-
-  const userId = req.auth?.sub;
-
-  if (body.roomId !== undefined) {
     const roomRow = await prisma.room.findFirst({ where: { id: body.roomId } });
     if (!roomRow) {
       res.status(400).json({ error: "Room not found" });
       return;
     }
-  }
 
-  let updated;
-  try {
-    updated = await prisma.$transaction(async (tx) => {
-      const u = await tx.bingo.update({
-        where: { id },
-        data: {
-          ...(body.roomId !== undefined ? { roomId: body.roomId } : {}),
-          name: body.name !== undefined ? body.name.trim() : undefined,
-          status: body.status,
-          bingoType: body.bingoType,
-          startDateTime: body.startDateTime !== undefined ? new Date(body.startDateTime) : undefined,
-          endDateTime:
-            body.endDateTime !== undefined ? (body.endDateTime === null ? null : new Date(body.endDateTime)) : undefined,
-          repeatEveryMinutes:
-            body.repeatEveryMinutes !== undefined ? body.repeatEveryMinutes ?? null : undefined,
-          cardPrice: body.cardPrice !== undefined ? toDecimalString(body.cardPrice) : undefined,
-          prizeMode: body.prizeMode,
-          prizePoolSeed:
-            body.prizePoolSeed !== undefined
-              ? toDecimalString(body.prizePoolSeed)
-              : body.prizeMode === BingoPrizeMode.FIXED
-                ? "0"
-                : undefined,
-          minPlayersToStart: body.minPlayersToStart,
-          prizePayoutMode: body.prizePayoutMode,
-          drawMode: body.drawMode,
-          updatedByUserId: userId ?? null,
-        },
-      });
-
-      if (body.prizes !== undefined) {
-        await syncBingoPrizesInUpdateTx(tx, id, body.prizes);
-      }
-
-      return tx.bingo.findFirstOrThrow({
-        where: { id: u.id },
-        include: { prizes: { orderBy: { figure: "asc" } }, room: true },
-      });
-    });
+    const bingo = await createBingo(body, req.auth?.sub);
+    res.status(201).json({ bingo });
   } catch (e) {
-    if (e instanceof Error && (e.name === "PrizeRemoveBlocked" || e.name === "PrizeAmountLocked")) {
-      res.status(409).json({ error: e.message });
+    const statusCode = (e as { statusCode?: number }).statusCode;
+    if (statusCode === 400) {
+      res.status(400).json({ error: e instanceof Error ? e.message : "Bad request" });
       return;
     }
-    throw e;
+    next(e);
   }
-
-  await syncScheduledRoundsForBingo(updated.id);
-  rescheduleLiveSessionForRoom(existing.roomId);
-  if (updated.roomId !== existing.roomId) rescheduleLiveSessionForRoom(updated.roomId);
-
-  res.json({ bingo: serializeBingo(updated) });
 });
 
-bingosRouter.patch("/:id/activate", async (req: AuthedRequest, res) => {
-  const { id } = req.params;
-  const bingo = await prisma.bingo.findFirst({ where: { id } });
-  if (!bingo) {
-    res.status(404).json({ error: "Bingo not found" });
-    return;
+bingosRouter.put("/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = updateBingoSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    const body = parsed.data;
+
+    const existing = await prisma.bingo.findFirst({ where: { id: req.params.id } });
+    if (!existing) {
+      res.status(404).json({ error: "Bingo not found" });
+      return;
+    }
+
+    const vErr = validateBingo({
+      repeatEveryMinutes:
+        body.repeatEveryMinutes !== undefined ? body.repeatEveryMinutes : existing.repeatEveryMinutes,
+      cardPrice: body.cardPrice !== undefined ? body.cardPrice : existing.cardPrice,
+      minPlayersToStart:
+        body.minPlayersToStart !== undefined ? body.minPlayersToStart : existing.minPlayersToStart,
+    });
+    if (vErr) {
+      res.status(400).json({ error: vErr });
+      return;
+    }
+    const mergedPrizeMode = body.prizeMode ?? existing.prizeMode;
+    if (body.prizes !== undefined) {
+      const mergedSeed =
+        body.prizePoolSeed !== undefined ? body.prizePoolSeed : existing.prizePoolSeed.toString();
+      const pErr = validatePrizes(body.prizes, mergedPrizeMode, mergedSeed);
+      if (pErr) {
+        res.status(400).json({ error: pErr });
+        return;
+      }
+    } else if (body.prizeMode === BingoPrizeMode.PERCENTAGE) {
+      const mergedSeed =
+        body.prizePoolSeed !== undefined ? body.prizePoolSeed : existing.prizePoolSeed.toString();
+      const seed = Number(toDecimalString(mergedSeed));
+      if (!Number.isFinite(seed) || seed < 0) {
+        res.status(400).json({
+          error: "prizePoolSeed must be a non-negative number when prize mode is PERCENTAGE",
+        });
+        return;
+      }
+    }
+
+    const mergedStart =
+      body.startDateTime !== undefined ? new Date(body.startDateTime) : existing.startDateTime;
+    const mergedEnd =
+      body.endDateTime !== undefined
+        ? body.endDateTime === null
+          ? null
+          : new Date(body.endDateTime)
+        : existing.endDateTime;
+    const boundsErr = validateScheduleBounds(mergedStart, mergedEnd);
+    if (boundsErr) {
+      res.status(400).json({ error: boundsErr });
+      return;
+    }
+
+    if (body.roomId !== undefined) {
+      const roomRow = await prisma.room.findFirst({ where: { id: body.roomId } });
+      if (!roomRow) {
+        res.status(400).json({ error: "Room not found" });
+        return;
+      }
+    }
+
+    try {
+      const bingo = await updateBingo(req.params.id, body, req.auth?.sub);
+      if (!bingo) {
+        res.status(404).json({ error: "Bingo not found" });
+        return;
+      }
+      res.json({ bingo });
+    } catch (e) {
+      if (e instanceof Error && (e.name === "PrizeRemoveBlocked" || e.name === "PrizeAmountLocked")) {
+        res.status(409).json({ error: e.message });
+        return;
+      }
+      const statusCode = (e as { statusCode?: number }).statusCode;
+      if (statusCode === 400) {
+        res.status(400).json({ error: e instanceof Error ? e.message : "Bad request" });
+        return;
+      }
+      throw e;
+    }
+  } catch (e) {
+    next(e);
   }
-  const userId = req.auth?.sub;
-  const updated = await prisma.bingo.update({
-    where: { id },
-    data: { status: BingoStatus.ACTIVE, updatedByUserId: userId ?? null },
-    include: { prizes: { orderBy: { figure: "asc" } }, room: true },
-  });
-  await syncScheduledRoundsForBingo(updated.id);
-  rescheduleLiveSessionForRoom(updated.roomId);
-  res.json({ bingo: serializeBingo(updated) });
 });
 
-bingosRouter.patch("/:id/deactivate", async (req: AuthedRequest, res) => {
-  const { id } = req.params;
-  const bingo = await prisma.bingo.findFirst({ where: { id } });
-  if (!bingo) {
-    res.status(404).json({ error: "Bingo not found" });
-    return;
+bingosRouter.patch("/:id/activate", async (req: AuthedRequest, res, next) => {
+  try {
+    const bingo = await setBingoStatus(req.params.id, BingoStatus.ACTIVE, req.auth?.sub);
+    if (!bingo) {
+      res.status(404).json({ error: "Bingo not found" });
+      return;
+    }
+    res.json({ bingo });
+  } catch (e) {
+    next(e);
   }
-  const userId = req.auth?.sub;
-  const updated = await prisma.bingo.update({
-    where: { id },
-    data: { status: BingoStatus.INACTIVE, updatedByUserId: userId ?? null },
-    include: { prizes: { orderBy: { figure: "asc" } }, room: true },
-  });
-  await syncScheduledRoundsForBingo(updated.id);
-  rescheduleLiveSessionForRoom(updated.roomId);
-  res.json({ bingo: serializeBingo(updated) });
 });
 
-bingosRouter.delete("/:id", async (req: AuthedRequest, res) => {
-  const { id } = req.params;
-  const bingo = await prisma.bingo.findFirst({ where: { id } });
-  if (!bingo) {
-    res.status(404).json({ error: "Bingo not found" });
-    return;
+bingosRouter.patch("/:id/deactivate", async (req: AuthedRequest, res, next) => {
+  try {
+    const bingo = await setBingoStatus(req.params.id, BingoStatus.INACTIVE, req.auth?.sub);
+    if (!bingo) {
+      res.status(404).json({ error: "Bingo not found" });
+      return;
+    }
+    res.json({ bingo });
+  } catch (e) {
+    next(e);
   }
-  const roomId = bingo.roomId;
-  await prisma.bingo.delete({ where: { id } });
-  rescheduleLiveSessionForRoom(roomId);
-  res.status(204).send();
 });
 
+bingosRouter.delete("/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const roomId = await deleteBingo(req.params.id);
+    if (!roomId) {
+      res.status(404).json({ error: "Bingo not found" });
+      return;
+    }
+    res.status(204).send();
+  } catch (e) {
+    next(e);
+  }
+});

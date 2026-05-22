@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { RoomStatus } from "@prisma/client";
+import { env } from "../config/env.js";
 import {
   ensureLiveSessionForRoom,
   registerLiveSession,
@@ -8,10 +9,12 @@ import {
   registerDrawnBallForRoom,
 } from "../game-engine/bingo/live-session.js";
 import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
+import { signDisplayOperatorToken } from "../lib/jwt.js";
+import { requireLiveDrawAuth } from "../middleware/live-draw-auth.js";
 import { prisma } from "../lib/prisma.js";
 
 /**
- * Read-only routes for the public bingo display app (no JWT).
+ * Public routes for bingo display (SSE, upcoming) and live operator actions (auth on mutating routes).
  */
 export const publicBingosRouter = Router();
 
@@ -100,8 +103,43 @@ const drawBallSchema = z.object({
   number: z.number().int().min(1).max(90),
 });
 
-/** Bingo Live: operador marca la bola sorteada en el video (sin auth — solo para entornos de prueba por ahora). */
-publicBingosRouter.post("/live/draw-ball", async (req, res) => {
+const operatorTokenSchema = z.object({
+  secret: z.string().min(1),
+});
+
+/**
+ * Exchange shared display secret for a short-lived JWT (`kind: display`).
+ * Requires `BINGO_DISPLAY_DRAW_SECRET` on the server.
+ */
+publicBingosRouter.post("/live/operator-token", async (req, res) => {
+  try {
+    const serverSecret = env.bingoDisplayDrawSecret;
+    if (!serverSecret) {
+      res.status(503).json({ error: "BINGO_DISPLAY_DRAW_SECRET is not configured on the server" });
+      return;
+    }
+    const parsed = operatorTokenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    if (parsed.data.secret !== serverSecret) {
+      res.status(401).json({ error: "Invalid secret" });
+      return;
+    }
+    res.json({
+      accessToken: signDisplayOperatorToken(),
+      tokenType: "Bearer",
+      expiresIn: env.jwtExpiresIn,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to issue operator token" });
+  }
+});
+
+/** Bingo Live: operador marca la bola sorteada en el video. */
+publicBingosRouter.post("/live/draw-ball", requireLiveDrawAuth, async (req, res) => {
   try {
     const room = await roomFromSlugQuery(req);
     if (!room) {
@@ -126,8 +164,8 @@ publicBingosRouter.post("/live/draw-ball", async (req, res) => {
   }
 });
 
-/** Detiene planificador y sorteo de una sala (desarrollo / operación). */
-publicBingosRouter.post("/live/stop", async (req, res) => {
+/** Detiene planificador y sorteo de una sala (operación). */
+publicBingosRouter.post("/live/stop", requireLiveDrawAuth, async (req, res) => {
   try {
     const room = await roomFromSlugQuery(req);
     if (!room) {

@@ -4,7 +4,7 @@ import {
   fingerprintCells,
   generateBingo75Cells,
   type CardCellInput,
-} from "./player-card.js";
+} from "../../../../src/game-engine/bingo/bingo-75/player-card.js";
 
 const SAMPLE_A: CardCellInput[] = [
   { row: 0, col: 0, number: 1, isFree: false },

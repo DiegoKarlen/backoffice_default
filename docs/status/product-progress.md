@@ -202,4 +202,49 @@ Objetivo: onboarding y operación sin depender del código. Ubicación sugerida:
 
 ---
 
+## Checklist de regresión (código)
+
+Usar tras PRs que toquen API, motor bingo, wallet o frontends críticos. Marcar cuando aplique.
+
+### Automatizado
+
+- [ ] `npm test` (raíz) o por suite: `npm run test:api:unit`, `test:api:integration`, `test:api:prizes`, `test:api:wallet`
+- [ ] Índice de escenarios: `api/tests/README.md` — `cd api && npm run test:list`
+
+### Manual rápido (~15 min)
+
+- [ ] BO: crear bingo 75 — modo premios **fijo** y **%** con pozo; figuras LINE + al menos una letra; guardar y reabrir
+- [ ] BO: programar partida / ver ronda en agenda
+- [ ] Portal: login jugador; comprar 2 cartones en partida SCHEDULED; saldo descontado
+- [ ] Portal: **Mis cartones** muestra grillas 5×5
+- [ ] Sorteo **virtual**: partida llega a premio línea; movimiento wallet o deferred según modo; display SSE muestra bolillas
+- [ ] Sorteo **live** (si aplica): 1 bolilla manual con JWT display; snapshot coherente
+- [ ] BO: cancelar partida programada — reembolso en wallet jugador
+- [ ] BO: jugador — listar movimientos con detalle compra/premio
+
+**Plan de mejoras:** `docs/roadmap/code-quality-improvement-plan.md`
+
+**Arquitectura (sesiones live, paquetes):** `docs/architecture.md`
+
+### Comandos útiles antes de QA
+
+```bash
+# Batería completa (desde raíz del repo):
+npm test
+
+# Diagnóstico rápido por escenario (desde raíz):
+npm run test:api:unit          # sin DB (~41 tests)
+npm run test:api:prizes        # premios (6 archivos)
+npm run test:api:wallet        # compra cartones (2 archivos)
+npm run test:shared
+
+# Desde api/:
+cd api && npm run test:list    # listar suites
+cd api && npm run build
+```
+
+Reiniciar API tras pull (`npm run dev` en `api/`) para cargar bootstrap de sesiones live y env validado.
+
+---
+
 

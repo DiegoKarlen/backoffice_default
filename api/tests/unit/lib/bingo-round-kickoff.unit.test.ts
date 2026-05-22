@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { BingoRoundStatus } from "@prisma/client";
-import { isRoundOpenForPurchase, isTerminalRoundStatus } from "./bingo-round-kickoff.js";
+import { isRoundOpenForPurchase, isTerminalRoundStatus } from "../../../src/lib/bingo-round-kickoff.js";
 
 describe("isRoundOpenForPurchase", () => {
   const future = new Date("2026-06-01T12:00:00.000Z");

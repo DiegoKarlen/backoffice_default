@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { roundStartsAtMs } from "./bingo-rounds-sync.js";
+import { roundStartsAtMs } from "../../../src/lib/bingo-rounds-sync.js";
 
 describe("roundStartsAtMs", () => {
   it("truncates to whole seconds", () => {

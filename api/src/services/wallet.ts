@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { applyWalletDelta, lockWalletForPlayer } from "./wallet-ledger.js";
 
 function buildManualDepositRef(adminUserId: string, note?: string | null): string {
   const safeNote = note?.trim() ? encodeURIComponent(note.trim().slice(0, 400)) : "";
@@ -40,16 +41,8 @@ export async function creditWalletManualDeposit(params: {
   }
 
   return prisma.$transaction(async (tx) => {
-    await tx.wallet.upsert({
-      where: { playerId },
-      create: { playerId, balanceCents: 0, currencyCode: "ARS" },
-      update: {},
-    });
-
-    await tx.$executeRawUnsafe(`SELECT id FROM "Wallet" WHERE "playerId" = $1 FOR UPDATE`, playerId);
-
-    const wallet = await tx.wallet.findUniqueOrThrow({ where: { playerId } });
-    const newBalance = wallet.balanceCents + amountCents;
+    const wallet = await lockWalletForPlayer(tx, playerId);
+    const { newBalanceCents: newBalance } = await applyWalletDelta(tx, wallet, amountCents);
 
     const deposit = await tx.deposit.create({
       data: {
@@ -70,11 +63,6 @@ export async function creditWalletManualDeposit(params: {
         balanceAfterCents: newBalance,
         depositId: deposit.id,
       },
-    });
-
-    await tx.wallet.update({
-      where: { id: wallet.id },
-      data: { balanceCents: newBalance },
     });
 
     return {

@@ -1,0 +1,69 @@
+/**
+ * Test runner with named suites for quick diagnostics.
+ *
+ * Usage (from api/):
+ *   npx tsx scripts/run-tests.mts              # all
+ *   npx tsx scripts/run-tests.mts unit         # fast, no DB
+ *   npx tsx scripts/run-tests.mts integration  # DB scenarios
+ *   npx tsx scripts/run-tests.mts prizes       # prize integration only
+ *   npx tsx scripts/run-tests.mts wallet       # wallet / purchase
+ *   npx tsx scripts/run-tests.mts --list
+ */
+import { spawnSync } from "node:child_process";
+import { globSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const apiRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const SUITES: Record<string, { pattern: string; label: string }> = {
+  all: { pattern: "tests/**/*.test.ts", label: "All API tests" },
+  unit: { pattern: "tests/unit/**/*.unit.test.ts", label: "Unit (no database)" },
+  integration: { pattern: "tests/integration/**/*.integration.test.ts", label: "Integration (database)" },
+  engine: { pattern: "tests/unit/game-engine/**/*.unit.test.ts", label: "Game engine unit" },
+  lib: { pattern: "tests/unit/lib/**/*.unit.test.ts", label: "Lib unit" },
+  prizes: { pattern: "tests/integration/prizes/**/*.integration.test.ts", label: "Prize scenarios" },
+  wallet: { pattern: "tests/integration/wallet/**/*.integration.test.ts", label: "Wallet / purchase scenarios" },
+};
+
+const arg = process.argv[2] ?? "all";
+
+if (arg === "--list" || arg === "-h" || arg === "--help") {
+  console.log("\nAPI test suites:\n");
+  for (const [name, { label, pattern }] of Object.entries(SUITES)) {
+    const count = globSync(pattern, { cwd: apiRoot }).length;
+    console.log(`  ${name.padEnd(14)} ${label} (${count} files) — ${pattern}`);
+  }
+  console.log("\nExamples:");
+  console.log("  npm test");
+  console.log("  npm run test:unit");
+  console.log("  npm run test:integration");
+  console.log("  npm run test:prizes");
+  console.log("  npx tsx scripts/run-tests.mts prizes\n");
+  process.exit(0);
+}
+
+const suite = SUITES[arg];
+if (!suite) {
+  console.error(`Unknown suite "${arg}". Run with --list`);
+  process.exit(1);
+}
+
+const relFiles = globSync(suite.pattern, { cwd: apiRoot }).sort();
+if (relFiles.length === 0) {
+  console.error(`No files matched ${suite.pattern}`);
+  process.exit(1);
+}
+
+const absFiles = relFiles.map((f) => path.join(apiRoot, f));
+console.log(`\n▶ ${suite.label}`);
+console.log(`  pattern: ${suite.pattern}`);
+console.log(`  files:   ${relFiles.length}\n`);
+
+const result = spawnSync(
+  "npx",
+  ["tsx", "--test", "--test-reporter", "spec", ...absFiles],
+  { cwd: apiRoot, stdio: "inherit", env: process.env, shell: true },
+);
+
+process.exit(result.status === null ? 1 : result.status);

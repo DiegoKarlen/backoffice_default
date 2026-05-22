@@ -402,23 +402,39 @@ table.pp-table {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
-  margin-bottom: 1rem;
+
+/* Mis cartones: grilla responsive (hasta 3 por fila en desktop) */
+.pp-cards-block {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 560px) {
+  .pp-cards-block {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .pp-cards-block {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .pp-card-unit {
-  margin-bottom: 1.25rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--pp-border);
-}
-
-.pp-card-unit:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--pp-border);
+  border-radius: 10px;
+  background: var(--pp-bg);
+  min-width: 0;
 }
 
 .pp-card-caption {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
   margin: 0 0 0.5rem;
   color: var(--pp-muted);
 }
@@ -427,15 +443,20 @@ table.pp-table {
   border-collapse: collapse;
   font-size: 0.82rem;
   margin: 0;
+  width: 100%;
+  table-layout: fixed;
 }
 
-.pp-bingo-grid td {
-  width: 2.35rem;
-  height: 2.35rem;
+.pp-card-unit .pp-bingo-grid td {
+  width: auto;
+  height: auto;
+  aspect-ratio: 1;
+  padding: 0.15rem;
   text-align: center;
   border: 1px solid var(--pp-border);
   vertical-align: middle;
   font-weight: 600;
+  font-size: clamp(0.62rem, 1.6vw, 0.8rem);
 }
 
 .pp-bingo-grid td.pp-cell-free {
