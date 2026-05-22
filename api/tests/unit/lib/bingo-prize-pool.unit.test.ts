@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { BingoPrizeMode } from "@prisma/client";
-import { computePrizePayoutCents } from "./bingo-prize-pool.js";
+import { computePrizePayoutCents } from "../../../src/lib/bingo-prize-pool.js";
 import { Prisma } from "@prisma/client";
 
 describe("computePrizePayoutCents", () => {

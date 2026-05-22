@@ -46,6 +46,7 @@ const resolve = {
   ],
   alias: {
     '@': path.join(manifest.paths.src),
+    '@shared': path.join(__dirname, '../../packages/shared/src'),
     '@/components': path.join(manifest.paths.src, 'assets', 'scripts', 'components'),
     '@/utils': path.join(manifest.paths.src, 'assets', 'scripts', 'utils'),
     '@/constants': path.join(manifest.paths.src, 'assets', 'scripts', 'constants'),

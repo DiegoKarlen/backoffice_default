@@ -2,15 +2,10 @@
  * Paginador reutilizable para tablas del backoffice (client-side).
  */
 import { t } from "./bo-i18n.js";
+import { esc } from "./bo-escape.js";
 
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
-
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s ?? "";
-  return d.innerHTML;
-}
 
 /**
  * @param {HTMLElement | null | undefined} tbody

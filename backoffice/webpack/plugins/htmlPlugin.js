@@ -3,8 +3,21 @@ const
   manifest          = require('../manifest'),
   HtmlWebpackPlugin = require('html-webpack-plugin');
 
-const titles = {
+/** Páginas producto (backoffice). */
+const productTitles = {
   'index': 'Backoffice · Inicio',
+  'signin': 'Adminator · Sign In',
+  'admin-users': 'Backoffice · Users',
+  'admin-roles': 'Backoffice · Roles',
+  'admin-functionalities': 'Backoffice · Functionalities',
+  'admin-bingos': 'Backoffice · Bingos',
+  'admin-players': 'Backoffice · Players',
+  'admin-security': 'Backoffice · Security',
+  'admin-rooms': 'Backoffice · Rooms',
+};
+
+/** Demo Adminator (solo si `BO_INCLUDE_ADMINATOR_DEMO=1`). */
+const demoTitles = {
   'email': 'Adminator · Email',
   'calendar': 'Adminator · Calendar',
   'chat': 'Adminator · Chat',
@@ -18,18 +31,13 @@ const titles = {
   'google-maps': 'Adminator · Google Maps',
   'vector-maps': 'Adminator · Vector Maps',
   'blank': 'Adminator · Blank',
-  'signin': 'Adminator · Sign In',
-  'admin-users': 'Backoffice · Users',
-  'admin-roles': 'Backoffice · Roles',
-  'admin-functionalities': 'Backoffice · Functionalities',
-  'admin-bingos': 'Backoffice · Bingos',
-  'admin-players': 'Backoffice · Players',
-  'admin-security': 'Backoffice · Security',
-  'admin-rooms': 'Backoffice · Rooms',
   'signup': 'Adminator · Sign Up',
   '404': 'Adminator · 404',
   '500': 'Adminator · 500',
 };
+
+const includeDemo = process.env.BO_INCLUDE_ADMINATOR_DEMO === '1';
+const titles = includeDemo ? { ...productTitles, ...demoTitles } : productTitles;
 
 let minify = {
   collapseWhitespace: false,
@@ -49,8 +57,6 @@ if (manifest.MINIFY) {
   };
 }
 
-
-// Every page is now a 2026 page. They all get the 2026 bundle and nothing else.
 module.exports = Object.keys(titles).map(title => {
   return new HtmlWebpackPlugin({
     template: path.join(manifest.paths.src, `${title}.html`),

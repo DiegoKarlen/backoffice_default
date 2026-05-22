@@ -17,18 +17,13 @@ import { initBingosPage } from "./bingo-admin.js";
 import { initRoomsPage } from "./room-admin.js";
 import { initPlayersPage } from "./player-admin.js";
 import QRCode from "qrcode";
+import { esc } from "./bo-escape.js";
 
 function showToast(el, msg, isError) {
   if (!el) return;
   el.textContent = msg;
   el.style.display = "block";
   el.style.color = isError ? "var(--danger, #c0392b)" : "var(--t-muted)";
-}
-
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s ?? "";
-  return d.innerHTML;
 }
 
 function updateShellUserChrome() {

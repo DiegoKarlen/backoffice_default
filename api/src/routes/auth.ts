@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/password.js";
 import { signAccessToken, signTwoFactorPendingToken, verifyAccessToken } from "../lib/jwt.js";
+import { loginRateLimiter } from "../middleware/auth-rate-limit.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { buildOtpauthUrl, generateTotpSecret, verifyTotpCode } from "../lib/totp.js";
 
@@ -70,7 +71,7 @@ const TOTP_ISSUER = () => process.env.TOTP_ISSUER?.trim() || "Backoffice";
 
 export const authRouter = Router();
 
-authRouter.post("/login", async (req, res) => {
+authRouter.post("/login", loginRateLimiter, async (req, res) => {
   const body = {
     ...req.body,
     email: typeof req.body?.email === "string" ? req.body.email.trim() : req.body?.email,
@@ -120,7 +121,7 @@ authRouter.post("/login", async (req, res) => {
   });
 });
 
-authRouter.post("/login/totp", async (req, res) => {
+authRouter.post("/login/totp", loginRateLimiter, async (req, res) => {
   const parsed = loginTotpSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });

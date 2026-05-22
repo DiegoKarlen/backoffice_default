@@ -4,12 +4,7 @@
 import { api } from "./bo-api.js";
 import { t, applyDomI18n } from "./bo-i18n.js";
 import { attachBoPager, pagerAnchorFromTbody } from "./bo-pager.js";
-
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s ?? "";
-  return d.innerHTML;
-}
+import { esc } from "./bo-escape.js";
 
 function showToast(el, msg, isError) {
   if (!el) return;

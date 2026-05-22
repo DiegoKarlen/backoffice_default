@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { listWalletTransactionsForPlayer, parseOptionalType } from "../lib/wallet-transactions-for-player.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { signPlayerAccessToken } from "../lib/jwt.js";
+import { loginRateLimiter } from "../middleware/auth-rate-limit.js";
 import { requirePlayer, type AuthedRequest } from "../middleware/auth.js";
 import { purchaseCartonsForRound } from "../services/carton-purchase.js";
 
@@ -21,7 +22,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-playerPortalRouter.post("/register", async (req, res) => {
+playerPortalRouter.post("/register", loginRateLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -65,7 +66,7 @@ playerPortalRouter.post("/register", async (req, res) => {
   });
 });
 
-playerPortalRouter.post("/login", async (req, res) => {
+playerPortalRouter.post("/login", loginRateLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });

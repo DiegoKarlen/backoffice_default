@@ -1,4 +1,5 @@
 import "./style.css";
+import { connectSseWithReconnect, escapeHtml } from "@shared/index.ts";
 import {
   fetchLiveSnapshot,
   fetchPublicRooms,
@@ -123,11 +124,7 @@ function runImpactAtChute(img: HTMLImageElement, p3: Pt, onDone: () => void): vo
   requestAnimationFrame(bounce);
 }
 
-function esc(s: string): string {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
-}
+const esc = escapeHtml;
 
 /** Pulso de escala al bajar el contador de bolas restantes. */
 function triggerFaltanCountPop(el: HTMLElement): void {
@@ -1534,59 +1531,45 @@ const DISPLAY_MARKUP = `
   </div>
 `;
 
+let disconnectLiveSse: (() => void) | null = null;
+
 function connectEventSource(): void {
-  const url = liveEventsUrl();
-  const es = new EventSource(url);
-
-  es.addEventListener("state", (ev) => {
-    try {
-      const s = JSON.parse((ev as MessageEvent).data) as LiveSnapshot;
-      if (!shouldApplyIncomingSnapshot(s)) return;
-      lastSnap = s;
-      applySnapshot(s);
-      tickClocks(s);
-    } catch {
-      /* ignore */
-    }
+  disconnectLiveSse?.();
+  disconnectLiveSse = connectSseWithReconnect({
+    url: liveEventsUrl(),
+    listeners: {
+      state: (raw) => {
+        const s = raw as LiveSnapshot;
+        if (!shouldApplyIncomingSnapshot(s)) return;
+        lastSnap = s;
+        applySnapshot(s);
+        tickClocks(s);
+      },
+      ball: () => {
+        fetchAndApplyLiveSnapshot();
+      },
+      round_start: () => {
+        prevLastBall = null;
+        setRoundLiveMarkingClosed(false);
+        fetchAndApplyLiveSnapshot();
+        refreshUpcomingPanel?.();
+      },
+      round_end: () => {
+        lockLiveBallPickerUi();
+        fetchAndApplyLiveSnapshot();
+        refreshUpcomingPanel?.();
+      },
+      idle: () => {
+        fetchAndApplyLiveSnapshot();
+        refreshUpcomingPanel?.();
+      },
+      prize_awarded: (raw) => {
+        if (isPrizeAwardedPayload(raw)) {
+          enqueuePrizeToast(raw);
+        }
+      },
+    },
   });
-
-  es.addEventListener("ball", () => {
-    fetchAndApplyLiveSnapshot();
-  });
-
-  es.addEventListener("round_start", () => {
-    prevLastBall = null;
-    setRoundLiveMarkingClosed(false);
-    fetchAndApplyLiveSnapshot();
-    refreshUpcomingPanel?.();
-  });
-
-  es.addEventListener("round_end", () => {
-    lockLiveBallPickerUi();
-    fetchAndApplyLiveSnapshot();
-    refreshUpcomingPanel?.();
-  });
-
-  es.addEventListener("idle", () => {
-    fetchAndApplyLiveSnapshot();
-    refreshUpcomingPanel?.();
-  });
-
-  es.addEventListener("prize_awarded", (ev) => {
-    try {
-      const raw = JSON.parse((ev as MessageEvent).data) as unknown;
-      if (isPrizeAwardedPayload(raw)) {
-        enqueuePrizeToast(raw);
-      }
-    } catch {
-      /* ignore */
-    }
-  });
-
-  es.onerror = () => {
-    es.close();
-    setTimeout(connectEventSource, 2500);
-  };
 }
 
 function applyBallAnchorCss(root: HTMLElement): void {

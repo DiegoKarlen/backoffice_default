@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { allocateWithUniqueFingerprint } from "../lib/allocate-unique-fingerprint.js";
 import { isRoundOpenForPurchase } from "../lib/bingo-round-kickoff.js";
 import { prisma } from "../lib/prisma.js";
+import { applyWalletDelta, lockWalletForPlayer } from "./wallet-ledger.js";
 import { decimalPriceToCents } from "../lib/money.js";
 import { fingerprintCells, generateBingo75Cells } from "../game-engine/bingo/bingo-75/player-card.js";
 
@@ -55,15 +56,7 @@ export async function purchaseCartonsForRound(params: {
   const totalCents = unitPriceCents * quantity;
 
   return prisma.$transaction(async (tx) => {
-    await tx.wallet.upsert({
-      where: { playerId },
-      create: { playerId, balanceCents: 0, currencyCode: "ARS" },
-      update: {},
-    });
-
-    await tx.$executeRawUnsafe(`SELECT id FROM "Wallet" WHERE "playerId" = $1 FOR UPDATE`, playerId);
-
-    const wallet = await tx.wallet.findUniqueOrThrow({ where: { playerId } });
+    const wallet = await lockWalletForPlayer(tx, playerId);
 
     if (wallet.balanceCents < totalCents) {
       throw new Error("Insufficient balance");
@@ -80,6 +73,14 @@ export async function purchaseCartonsForRound(params: {
     });
 
     const playerRoundCardIds: string[] = [];
+    const takenFingerprints = new Set(
+      (
+        await tx.playerRoundCard.findMany({
+          where: { bingoRoundId },
+          select: { cardFingerprint: true },
+        })
+      ).map((r) => r.cardFingerprint),
+    );
 
     for (let cardIndex = 0; cardIndex < quantity; cardIndex++) {
       const allocated = await allocateWithUniqueFingerprint({
@@ -87,10 +88,12 @@ export async function purchaseCartonsForRound(params: {
         generate: () => generateBingo75Cells(),
         getFingerprint: fingerprintCells,
         isTaken: async (fingerprint) => {
+          if (takenFingerprints.has(fingerprint)) return true;
           const clash = await tx.playerRoundCard.findFirst({
             where: { bingoRoundId, cardFingerprint: fingerprint },
             select: { id: true },
           });
+          if (clash) takenFingerprints.add(fingerprint);
           return clash != null;
         },
         persist: async (cells, fingerprint) => {
@@ -113,6 +116,7 @@ export async function purchaseCartonsForRound(params: {
               },
             });
             playerRoundCardIds.push(card.id);
+            takenFingerprints.add(fingerprint);
           } catch (e) {
             if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
               throw { duplicate: true as const };
@@ -127,7 +131,7 @@ export async function purchaseCartonsForRound(params: {
       }
     }
 
-    const newBalance = wallet.balanceCents - totalCents;
+    const { newBalanceCents: newBalance } = await applyWalletDelta(tx, wallet, -totalCents);
 
     await tx.walletTransaction.create({
       data: {
@@ -137,11 +141,6 @@ export async function purchaseCartonsForRound(params: {
         balanceAfterCents: newBalance,
         cartonPurchaseId: purchase.id,
       },
-    });
-
-    await tx.wallet.update({
-      where: { id: wallet.id },
-      data: { balanceCents: newBalance },
     });
 
     return {

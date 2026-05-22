@@ -1,5 +1,6 @@
 import type { Request } from "express";
 import { BingoFigure, BingoPrizeMode, BingoStatus, BingoType, Prisma } from "@prisma/client";
+import { env } from "../config/env.js";
 import { bingoPrizeDisplayAmount } from "./bingo-prize-display.js";
 import { prisma } from "./prisma.js";
 
@@ -126,10 +127,30 @@ export type BuildUpcomingOptions = {
   roomId?: string;
 };
 
-/**
- * Shared payload for GET /backoffice/bingos/upcoming (auth) and GET /public/bingos/upcoming (no auth).
- */
-export async function buildUpcomingPayload(
+const upcomingCache = new Map<string, { at: number; payload: UpcomingPayload }>();
+
+export function invalidateUpcomingCache(): void {
+  upcomingCache.clear();
+}
+
+function upcomingCacheKey(
+  q: Request["query"],
+  options?: BuildUpcomingOptions,
+  nowMs?: number,
+): string {
+  const roomSlug = typeof q.roomSlug === "string" ? q.roomSlug.trim() : "";
+  const horizonDays = typeof q.horizonDays === "string" ? q.horizonDays : typeof q.h === "string" ? q.h : "";
+  const limit = typeof q.limit === "string" ? q.limit : typeof q.n === "string" ? q.n : "";
+  return JSON.stringify({
+    roomSlug,
+    roomId: options?.roomId ?? "",
+    horizonDays,
+    limit,
+    bucket: nowMs != null ? Math.floor(nowMs / env.upcomingCacheTtlMs) : 0,
+  });
+}
+
+async function computeUpcomingPayload(
   q: Request["query"],
   nowInput?: Date,
   options?: BuildUpcomingOptions,
@@ -251,4 +272,28 @@ export async function buildUpcomingPayload(
     next,
     upcoming: trimmed,
   };
+}
+
+/**
+ * Shared payload for GET /backoffice/bingos/upcoming (auth) and GET /public/bingos/upcoming (no auth).
+ * TTL configurable via `UPCOMING_CACHE_TTL_MS` (0 = disabled).
+ */
+export async function buildUpcomingPayload(
+  q: Request["query"],
+  nowInput?: Date,
+  options?: BuildUpcomingOptions,
+): Promise<UpcomingPayload> {
+  const ttl = env.upcomingCacheTtlMs;
+  if (ttl <= 0) {
+    return computeUpcomingPayload(q, nowInput, options);
+  }
+  const now = nowInput ?? new Date();
+  const key = upcomingCacheKey(q, options, now.getTime());
+  const hit = upcomingCache.get(key);
+  if (hit && now.getTime() - hit.at < ttl) {
+    return hit.payload;
+  }
+  const payload = await computeUpcomingPayload(q, now, options);
+  upcomingCache.set(key, { at: now.getTime(), payload });
+  return payload;
 }

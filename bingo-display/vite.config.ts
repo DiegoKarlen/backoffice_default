@@ -1,8 +1,16 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+
+const dir = path.dirname(fileURLToPath(import.meta.url));
 
 /** Public bingo viewer — dev server (default :5174). API URL via VITE_API_URL or proxy below. */
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@shared": path.resolve(dir, "../packages/shared/src"),
+    },
+  },
   plugins: [
     {
       name: "spa-fallback-room-routes",
