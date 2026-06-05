@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import { httpError, rethrowPlayerWalletError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { asyncHandler } from "../middleware/async-handler.js";
 import { creditWalletManualDeposit } from "../services/wallet.js";
 import { creditPrizeToWinner } from "../services/prize-payout.js";
 import { listWalletTransactionsForPlayer } from "../lib/wallet-transactions-for-player.js";
@@ -18,59 +20,61 @@ const listQuerySchema = z.object({
 
 const uuidParam = z.string().uuid();
 
-playersRouter.get("/", async (req: AuthedRequest, res) => {
-  const parsed = listQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  const { q, limit = 50 } = parsed.data;
+playersRouter.get(
+  "/",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const parsed = listQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
+    }
+    const { q, limit = 50 } = parsed.data;
 
-  const where =
-    q && q.trim()
-      ? {
-          OR: [
-            { email: { contains: q.trim(), mode: "insensitive" as const } },
-            { username: { contains: q.trim(), mode: "insensitive" as const } },
-          ],
-        }
-      : undefined;
+    const where =
+      q && q.trim()
+        ? {
+            OR: [
+              { email: { contains: q.trim(), mode: "insensitive" as const } },
+              { username: { contains: q.trim(), mode: "insensitive" as const } },
+            ],
+          }
+        : undefined;
 
-  const players = await prisma.player.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      email: true,
-      username: true,
-      active: true,
-      createdAt: true,
-      wallet: {
-        select: {
-          balanceCents: true,
-          currencyCode: true,
+    const players = await prisma.player.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        active: true,
+        createdAt: true,
+        wallet: {
+          select: {
+            balanceCents: true,
+            currencyCode: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  res.json({
-    players: players.map((p) => ({
-      id: p.id,
-      email: p.email,
-      username: p.username,
-      active: p.active,
-      createdAt: p.createdAt.toISOString(),
-      wallet: p.wallet
-        ? {
-            balanceCents: p.wallet.balanceCents,
-            currencyCode: p.wallet.currencyCode,
-          }
-        : null,
-    })),
-  });
-});
+    res.json({
+      players: players.map((p) => ({
+        id: p.id,
+        email: p.email,
+        username: p.username,
+        active: p.active,
+        createdAt: p.createdAt.toISOString(),
+        wallet: p.wallet
+          ? {
+              balanceCents: p.wallet.balanceCents,
+              currencyCode: p.wallet.currencyCode,
+            }
+          : null,
+      })),
+    });
+  }),
+);
 
 /** `from` / `to`: opcional, formato `YYYY-MM-DD` (interpretación en UTC para el día calendario). */
 function parseWalletTxQueryDateFrom(s: string): Date | null {
@@ -98,261 +102,232 @@ function parseWalletTxQueryDateTo(s: string): Date | null {
 }
 
 /** Ledger de wallet (mismo shape que `/player/wallet/transactions`; más reciente primero). */
-playersRouter.get("/:playerId/wallet/transactions", async (req: AuthedRequest, res) => {
-  const parseId = uuidParam.safeParse(req.params.playerId);
-  if (!parseId.success) {
-    res.status(400).json({ error: "Invalid player id" });
-    return;
-  }
-  const playerId = parseId.data;
-
-  const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
-  const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
-  let createdAtFrom: Date | undefined;
-  let createdAtTo: Date | undefined;
-  if (fromRaw) {
-    const d = parseWalletTxQueryDateFrom(fromRaw);
-    if (!d) {
-      res.status(400).json({ error: "Invalid from date (use YYYY-MM-DD)" });
-      return;
+playersRouter.get(
+  "/:playerId/wallet/transactions",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const parseId = uuidParam.safeParse(req.params.playerId);
+    if (!parseId.success) {
+      throw httpError(400, "Invalid player id");
     }
-    createdAtFrom = d;
-  }
-  if (toRaw) {
-    const d = parseWalletTxQueryDateTo(toRaw);
-    if (!d) {
-      res.status(400).json({ error: "Invalid to date (use YYYY-MM-DD)" });
-      return;
+    const playerId = parseId.data;
+
+    const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
+    const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
+    let createdAtFrom: Date | undefined;
+    let createdAtTo: Date | undefined;
+    if (fromRaw) {
+      const d = parseWalletTxQueryDateFrom(fromRaw);
+      if (!d) {
+        throw httpError(400, "Invalid from date (use YYYY-MM-DD)");
+      }
+      createdAtFrom = d;
     }
-    createdAtTo = d;
-  }
-  if (createdAtFrom && createdAtTo && createdAtFrom.getTime() > createdAtTo.getTime()) {
-    res.status(400).json({ error: "from must be on or before to" });
-    return;
-  }
+    if (toRaw) {
+      const d = parseWalletTxQueryDateTo(toRaw);
+      if (!d) {
+        throw httpError(400, "Invalid to date (use YYYY-MM-DD)");
+      }
+      createdAtTo = d;
+    }
+    if (createdAtFrom && createdAtTo && createdAtFrom.getTime() > createdAtTo.getTime()) {
+      throw httpError(400, "from must be on or before to");
+    }
 
-  const hasDateRange = !!(createdAtFrom || createdAtTo);
-  const defaultLimit = hasDateRange ? 500 : 100;
-  const limit = Math.min(hasDateRange ? 2000 : 200, Math.max(1, Number(req.query.limit) || defaultLimit));
+    const hasDateRange = !!(createdAtFrom || createdAtTo);
+    const defaultLimit = hasDateRange ? 500 : 100;
+    const limit = Math.min(hasDateRange ? 2000 : 200, Math.max(1, Number(req.query.limit) || defaultLimit));
 
-  const payload = await listWalletTransactionsForPlayer({
-    playerId,
-    limit,
-    order: "desc",
-    createdAtFrom,
-    createdAtTo,
-  });
-  res.json(payload);
-});
+    const payload = await listWalletTransactionsForPlayer({
+      playerId,
+      limit,
+      order: "desc",
+      createdAtFrom,
+      createdAtTo,
+    });
+    res.json(payload);
+  }),
+);
 
 /** Vista de cartón(es) para compra o premio (BINGO_75). */
-playersRouter.get("/:playerId/wallet/transactions/:transactionId/card-detail", async (req: AuthedRequest, res) => {
-  const pPlayer = uuidParam.safeParse(req.params.playerId);
-  const pTx = uuidParam.safeParse(req.params.transactionId);
-  if (!pPlayer.success || !pTx.success) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
-  const result = await getWalletTransactionCardDetail({
-    playerId: pPlayer.data,
-    walletTransactionId: pTx.data,
-  });
-  if (!result.ok) {
-    res.status(result.status).json({ error: result.error });
-    return;
-  }
-  res.json(result.data);
-});
+playersRouter.get(
+  "/:playerId/wallet/transactions/:transactionId/card-detail",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const pPlayer = uuidParam.safeParse(req.params.playerId);
+    const pTx = uuidParam.safeParse(req.params.transactionId);
+    if (!pPlayer.success || !pTx.success) {
+      throw httpError(400, "Invalid id");
+    }
+    const result = await getWalletTransactionCardDetail({
+      playerId: pPlayer.data,
+      walletTransactionId: pTx.data,
+    });
+    if (!result.ok) {
+      throw httpError(result.status, result.error);
+    }
+    res.json(result.data);
+  }),
+);
 
-playersRouter.get("/:playerId/purchases", async (req: AuthedRequest, res) => {
-  const parseId = uuidParam.safeParse(req.params.playerId);
-  if (!parseId.success) {
-    res.status(400).json({ error: "Invalid player id" });
-    return;
-  }
-  const playerId = parseId.data;
+playersRouter.get(
+  "/:playerId/purchases",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const parseId = uuidParam.safeParse(req.params.playerId);
+    if (!parseId.success) {
+      throw httpError(400, "Invalid player id");
+    }
+    const playerId = parseId.data;
 
-  const purchases = await prisma.cartonPurchase.findMany({
-    where: { playerId },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: {
-      bingoRound: {
-        include: {
-          bingo: {
-            include: {
-              room: { select: { id: true, name: true, slug: true } },
+    const purchases = await prisma.cartonPurchase.findMany({
+      where: { playerId },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        bingoRound: {
+          include: {
+            bingo: {
+              include: {
+                room: { select: { id: true, name: true, slug: true } },
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  res.json({
-    purchases: purchases.map((p) => ({
-      id: p.id,
-      quantity: p.quantity,
-      unitPriceCents: p.unitPriceCents,
-      totalCents: p.totalCents,
-      createdAt: p.createdAt.toISOString(),
-      round: {
-        id: p.bingoRound.id,
-        sequence: p.bingoRound.sequence,
-        startsAt: p.bingoRound.startsAt.toISOString(),
-        status: p.bingoRound.status,
-        bingo: {
-          id: p.bingoRound.bingo.id,
-          name: p.bingoRound.bingo.name,
-          bingoType: p.bingoRound.bingo.bingoType,
-          room: p.bingoRound.bingo.room,
+    res.json({
+      purchases: purchases.map((p) => ({
+        id: p.id,
+        quantity: p.quantity,
+        unitPriceCents: p.unitPriceCents,
+        totalCents: p.totalCents,
+        createdAt: p.createdAt.toISOString(),
+        round: {
+          id: p.bingoRound.id,
+          sequence: p.bingoRound.sequence,
+          startsAt: p.bingoRound.startsAt.toISOString(),
+          status: p.bingoRound.status,
+          bingo: {
+            id: p.bingoRound.bingo.id,
+            name: p.bingoRound.bingo.name,
+            bingoType: p.bingoRound.bingo.bingoType,
+            room: p.bingoRound.bingo.room,
+          },
         },
-      },
-    })),
-  });
-});
+      })),
+    });
+  }),
+);
 
-playersRouter.get("/:playerId/prize-payouts", async (req: AuthedRequest, res) => {
-  const parseId = uuidParam.safeParse(req.params.playerId);
-  if (!parseId.success) {
-    res.status(400).json({ error: "Invalid player id" });
-    return;
-  }
-  const playerId = parseId.data;
+playersRouter.get(
+  "/:playerId/prize-payouts",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const parseId = uuidParam.safeParse(req.params.playerId);
+    if (!parseId.success) {
+      throw httpError(400, "Invalid player id");
+    }
+    const playerId = parseId.data;
 
-  const payouts = await prisma.prizePayout.findMany({
-    where: { playerId },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: {
-      bingoPrize: { select: { id: true, figure: true, amount: true } },
-      playerRoundCard: { select: { id: true, cardFingerprint: true, bingoRoundId: true } },
-    },
-  });
+    const payouts = await prisma.prizePayout.findMany({
+      where: { playerId },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        bingoPrize: { select: { id: true, figure: true, amount: true } },
+        playerRoundCard: { select: { id: true, cardFingerprint: true, bingoRoundId: true } },
+      },
+    });
 
-  res.json({
-    prizePayouts: payouts.map((p) => ({
-      id: p.id,
-      amountCents: p.amountCents,
-      createdAt: p.createdAt.toISOString(),
-      prize: {
-        id: p.bingoPrize.id,
-        figure: p.bingoPrize.figure,
-        amount: p.bingoPrize.amount.toString(),
-      },
-      winningCard: {
-        id: p.playerRoundCard.id,
-        cardFingerprint: p.playerRoundCard.cardFingerprint,
-        bingoRoundId: p.playerRoundCard.bingoRoundId,
-      },
-    })),
-  });
-});
+    res.json({
+      prizePayouts: payouts.map((p) => ({
+        id: p.id,
+        amountCents: p.amountCents,
+        createdAt: p.createdAt.toISOString(),
+        prize: {
+          id: p.bingoPrize.id,
+          figure: p.bingoPrize.figure,
+          amount: p.bingoPrize.amount.toString(),
+        },
+        winningCard: {
+          id: p.playerRoundCard.id,
+          cardFingerprint: p.playerRoundCard.cardFingerprint,
+          bingoRoundId: p.playerRoundCard.bingoRoundId,
+        },
+      })),
+    });
+  }),
+);
 
 const prizeCreditBodySchema = z.object({
   bingoPrizeId: z.string().uuid(),
   playerRoundCardId: z.string().uuid(),
 });
 
-playersRouter.post("/:playerId/prize-credits", async (req: AuthedRequest, res) => {
-  const parseId = uuidParam.safeParse(req.params.playerId);
-  if (!parseId.success) {
-    res.status(400).json({ error: "Invalid player id" });
-    return;
-  }
-  const playerId = parseId.data;
-
-  const parsed = prizeCreditBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-
-  try {
-    const result = await creditPrizeToWinner({
-      playerId,
-      bingoPrizeId: parsed.data.bingoPrizeId,
-      playerRoundCardId: parsed.data.playerRoundCardId,
-    });
-    res.status(201).json(result);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Prize credit failed";
-    if (msg === "Player not found" || msg === "Prize not found" || msg === "Player round card not found") {
-      res.status(404).json({ error: msg });
-      return;
+playersRouter.post(
+  "/:playerId/prize-credits",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const parseId = uuidParam.safeParse(req.params.playerId);
+    if (!parseId.success) {
+      throw httpError(400, "Invalid player id");
     }
-    if (
-      msg.includes("does not belong") ||
-      msg.includes("does not match") ||
-      msg === "Player is inactive"
-    ) {
-      res.status(409).json({ error: msg });
-      return;
+    const playerId = parseId.data;
+
+    const parsed = prizeCreditBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
     }
-    // eslint-disable-next-line no-console
-    console.error(e);
-    res.status(500).json({ error: msg });
-  }
-});
+
+    try {
+      const result = await creditPrizeToWinner({
+        playerId,
+        bingoPrizeId: parsed.data.bingoPrizeId,
+        playerRoundCardId: parsed.data.playerRoundCardId,
+      });
+      res.status(201).json(result);
+    } catch (e) {
+      rethrowPlayerWalletError(e);
+    }
+  }),
+);
 
 const manualCreditBodySchema = z.object({
   amountCents: z.number().int().positive(),
   note: z.string().max(500).optional(),
 });
 
-playersRouter.post("/:playerId/wallet/manual-credits", async (req: AuthedRequest, res) => {
-  const adminUserId = req.auth?.sub;
-  if (!adminUserId) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const playerId = req.params.playerId;
-  if (!uuidParam.safeParse(playerId).success) {
-    res.status(400).json({ error: "Invalid player id" });
-    return;
-  }
-
-  const parsed = manualCreditBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-
-  try {
-    const result = await creditWalletManualDeposit({
-      playerId,
-      amountCents: parsed.data.amountCents,
-      adminUserId,
-      note: parsed.data.note,
-    });
-
-    res.status(201).json({
-      depositId: result.depositId,
-      transactionId: result.transactionId,
-      walletId: result.walletId,
-      balanceCents: result.balanceCents,
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Credit failed";
-    if (msg === "Player not found") {
-      res.status(404).json({ error: msg });
-      return;
+playersRouter.post(
+  "/:playerId/wallet/manual-credits",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const adminUserId = req.auth?.sub;
+    if (!adminUserId) {
+      throw httpError(401, "Unauthorized");
     }
-    if (msg === "Player is inactive") {
-      res.status(409).json({ error: msg });
-      return;
+
+    const playerId = req.params.playerId;
+    if (!uuidParam.safeParse(playerId).success) {
+      throw httpError(400, "Invalid player id");
     }
-    if (
-      msg.includes("amountCents") ||
-      msg.includes("maximum") ||
-      msg.includes("positive integer")
-    ) {
-      res.status(400).json({ error: msg });
-      return;
+
+    const parsed = manualCreditBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
     }
-    // eslint-disable-next-line no-console
-    console.error(e);
-    res.status(500).json({ error: msg });
-  }
-});
+
+    try {
+      const result = await creditWalletManualDeposit({
+        playerId,
+        amountCents: parsed.data.amountCents,
+        adminUserId,
+        note: parsed.data.note,
+      });
+
+      res.status(201).json({
+        depositId: result.depositId,
+        transactionId: result.transactionId,
+        walletId: result.walletId,
+        balanceCents: result.balanceCents,
+      });
+    } catch (e) {
+      rethrowPlayerWalletError(e);
+    }
+  }),
+);

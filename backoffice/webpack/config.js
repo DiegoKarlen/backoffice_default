@@ -40,16 +40,16 @@ const
 
 const resolve = {
   extensions: ['.tsx', '.ts', '.webpack-loader.js', '.web-loader.js', '.loader.js', '.js', '.jsx'],
+  extensionAlias: {
+    '.js': ['.ts', '.tsx', '.js'],
+  },
   modules: [
     path.join(__dirname, '../node_modules'),
     path.join(manifest.paths.src, ''),
   ],
   alias: {
     '@': path.join(manifest.paths.src),
-    '@shared': path.join(__dirname, '../../packages/shared/src'),
-    '@/components': path.join(manifest.paths.src, 'assets', 'scripts', 'components'),
-    '@/utils': path.join(manifest.paths.src, 'assets', 'scripts', 'utils'),
-    '@/constants': path.join(manifest.paths.src, 'assets', 'scripts', 'constants'),
+    '@shared': path.resolve(__dirname, '../../packages/shared/src'),
   },
 };
 

@@ -2,33 +2,15 @@
  * Players — list + manual wallet credit (backoffice).
  */
 import { api } from "./bo-api.js";
-import { t, applyDomI18n, getLocale } from "./bo-i18n.js";
+import { t, applyDomI18n } from "./bo-i18n.js";
 import { attachBoPager, pagerAnchorFromTbody } from "./bo-pager.js";
-import { esc } from "./bo-escape.js";
+import { esc, formatBoMoneyFromCents } from "./bo-shared.js";
 
 function showToast(el, msg, isError) {
   if (!el) return;
   el.textContent = msg;
   el.style.display = "block";
   el.style.color = isError ? "var(--danger, #c0392b)" : "var(--t-muted)";
-}
-
-function moneyLocaleTag() {
-  return getLocale() === "es" ? "es-AR" : "en-US";
-}
-
-/**
- * @param {number | null | undefined} cents
- */
-function formatArsFromCents(cents) {
-  const n = Number(cents);
-  if (!Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat(moneyLocaleTag(), {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n / 100);
 }
 
 /**
@@ -252,8 +234,8 @@ function renderWalletRow(tx) {
     <td>${esc(room)}</td>
     <td>${esc(bingo)}</td>
     <td class="mono">${esc(partida)}</td>
-    <td class="mono ${amtSign}">${esc(formatArsFromCents(amount))}<span class="field-help"> (${esc(String(tx.amountCents))})</span></td>
-    <td class="mono">${esc(formatArsFromCents(tx.balanceAfterCents))}</td>
+    <td class="mono ${amtSign}">${esc(formatBoMoneyFromCents(amount))}<span class="field-help"> (${esc(String(tx.amountCents))})</span></td>
+    <td class="mono">${esc(formatBoMoneyFromCents(tx.balanceAfterCents))}</td>
     <td>${detailTd}</td>
   </tr>`;
 }

@@ -56,10 +56,6 @@ async function startServer(): Promise<void> {
   app.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(`api listening on http://localhost:${env.port}`);
-    if (env.liveDrawAuthOptional) {
-      // eslint-disable-next-line no-console
-      console.warn("[api] LIVE_DRAW_AUTH_OPTIONAL is enabled — draw-ball/stop are unauthenticated");
-    }
   });
 }
 

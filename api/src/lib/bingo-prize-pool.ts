@@ -24,13 +24,14 @@ export async function computeRoundPrizePoolCents(
 
 export function computePrizePayoutCents(
   prizeMode: BingoPrizeMode,
-  prize: Pick<BingoPrize, "amount">,
+  prize: { amount: Pick<BingoPrize, "amount">["amount"] | string },
   roundPoolCents: number,
 ): number {
+  const amount = typeof prize.amount === "string" ? prize.amount : prize.amount.toString();
   if (prizeMode === BingoPrizeMode.PERCENTAGE) {
-    const pct = Number(prize.amount.toString());
+    const pct = Number(amount);
     if (!Number.isFinite(pct) || pct <= 0) return 0;
     return Math.floor((roundPoolCents * pct) / 100);
   }
-  return decimalPriceToCents(prize.amount);
+  return decimalPriceToCents(amount);
 }

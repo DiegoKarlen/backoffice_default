@@ -1,5 +1,12 @@
 import type { Request } from "express";
-import { BingoFigure, BingoPrizeMode, BingoStatus, BingoType, Prisma } from "@prisma/client";
+import {
+  BingoDrawMode,
+  BingoFigure,
+  BingoPrizeMode,
+  BingoStatus,
+  BingoType,
+  Prisma,
+} from "@prisma/client";
 import { env } from "../config/env.js";
 import { bingoPrizeDisplayAmount } from "./bingo-prize-display.js";
 import { prisma } from "./prisma.js";
@@ -15,6 +22,7 @@ export type UpcomingOccurrence = {
   bingoId: string;
   name: string;
   bingoType: BingoType;
+  drawMode: BingoDrawMode;
   prizeMode: BingoPrizeMode;
   cardPrice: string;
   startsAt: string;
@@ -219,6 +227,7 @@ async function computeUpcomingPayload(
         bingoId: r.bingoId,
         name: b.name,
         bingoType: r.bingoType,
+        drawMode: b.drawMode,
         prizeMode: b.prizeMode,
         cardPrice: r.cardPrice,
         startsAt: r.startsAt.toISOString(),

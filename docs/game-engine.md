@@ -123,6 +123,7 @@ Implementación: `lib/bingo-round-kickoff.ts` + `live-session.ts` → `beginSche
 | Ventas | Abiertas solo si `SCHEDULED` y `startsAt` aún no llegó (`isRoundOpenForPurchase` en compra de cartones). |
 | Al `startsAt` | Se cuentan cartones vendidos con la ronda aún `SCHEDULED`. |
 | Cupo insuficiente | `SCHEDULED` → `CANCELLED` (`MIN_CARTONS_NOT_MET`) + reembolso; **no** pasa por `DRAWING`; SSE `round_cancelled`. |
+| Otra partida en la sala | Si ya hay un sorteo `DRAWING` en la misma sala a la hora de `startsAt`, la partida nueva queda `CANCELLED` (`ROOM_DRAW_IN_PROGRESS`) + reembolso de cartones; **no** se encola. |
 | Cupo OK | `SCHEDULED` → `DRAWING` (atómico) y luego SSE `round_start` + bolillas. |
 
 Con `uniquePerRound`, la misma bolilla no excluye a nadie: todos los cartones que completan la figura en esa bolilla entran. El desempate por compra solo ordena el reparto de céntimos sobrantes al liquidar en modo diferido.

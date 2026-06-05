@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
+import { isAppError } from "../lib/errors.js";
+import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/password.js";
 import { signAccessToken, signTwoFactorPendingToken, verifyAccessToken } from "../lib/jwt.js";
 import { loginRateLimiter } from "../middleware/auth-rate-limit.js";
+import { asyncHandler } from "../middleware/async-handler.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { buildOtpauthUrl, generateTotpSecret, verifyTotpCode } from "../lib/totp.js";
 
@@ -71,217 +74,226 @@ const TOTP_ISSUER = () => process.env.TOTP_ISSUER?.trim() || "Backoffice";
 
 export const authRouter = Router();
 
-authRouter.post("/login", loginRateLimiter, async (req, res) => {
-  const body = {
-    ...req.body,
-    email: typeof req.body?.email === "string" ? req.body.email.trim() : req.body?.email,
-  };
-  const parsed = loginSchema.safeParse(body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  const { email, password } = parsed.data;
+authRouter.post(
+  "/login",
+  loginRateLimiter,
+  asyncHandler(async (req, res) => {
+    const body = {
+      ...req.body,
+      email: typeof req.body?.email === "string" ? req.body.email.trim() : req.body?.email,
+    };
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
+    }
+    const { email, password } = parsed.data;
 
-  const user = await prisma.user.findFirst({
-    where: { email, active: true },
-    include: userInclude,
-  });
-
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    res.status(401).json({ error: "Invalid credentials" });
-    return;
-  }
-
-  if (user.totpEnabled && user.totpSecret) {
-    const twoFactorToken = signTwoFactorPendingToken({ sub: user.id, email: user.email });
-    res.json({
-      requiresTwoFactor: true,
-      twoFactorToken,
-      expiresIn: process.env.JWT_2FA_EXPIRES_IN ?? "5m",
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-      },
+    const user = await prisma.user.findFirst({
+      where: { email, active: true },
+      include: userInclude,
     });
-    return;
-  }
 
-  const token = signAccessToken({
-    sub: user.id,
-    email: user.email,
-  });
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      throw httpError(401, "Invalid credentials");
+    }
 
-  res.json({
-    accessToken: token,
-    tokenType: "Bearer",
-    expiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
-    user: publicUserJson(user),
-  });
-});
-
-authRouter.post("/login/totp", loginRateLimiter, async (req, res) => {
-  const parsed = loginTotpSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  const { twoFactorToken, code } = parsed.data;
-
-  let payload: { sub: string; email: string };
-  try {
-    const decoded = verifyAccessToken(twoFactorToken);
-    if (decoded.kind !== "2fa_pending") {
-      res.status(401).json({ error: "Invalid two-factor token" });
+    if (user.totpEnabled && user.totpSecret) {
+      const twoFactorToken = signTwoFactorPendingToken({ sub: user.id, email: user.email });
+      res.json({
+        requiresTwoFactor: true,
+        twoFactorToken,
+        expiresIn: process.env.JWT_2FA_EXPIRES_IN ?? "5m",
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+        },
+      });
       return;
     }
-    payload = { sub: decoded.sub, email: decoded.email };
-  } catch {
-    res.status(401).json({ error: "Invalid or expired two-factor token" });
-    return;
-  }
 
-  const user = await prisma.user.findFirst({
-    where: { id: payload.sub, email: payload.email, active: true },
-    include: userInclude,
-  });
+    const token = signAccessToken({
+      sub: user.id,
+      email: user.email,
+    });
 
-  if (!user || !user.totpEnabled || !user.totpSecret) {
-    res.status(401).json({ error: "Two-factor authentication is not active for this account" });
-    return;
-  }
+    res.json({
+      accessToken: token,
+      tokenType: "Bearer",
+      expiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
+      user: publicUserJson(user),
+    });
+  }),
+);
 
-  if (!verifyTotpCode(user.totpSecret, code)) {
-    res.status(401).json({ error: "Invalid authenticator code" });
-    return;
-  }
+authRouter.post(
+  "/login/totp",
+  loginRateLimiter,
+  asyncHandler(async (req, res) => {
+    const parsed = loginTotpSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
+    }
+    const { twoFactorToken, code } = parsed.data;
 
-  const token = signAccessToken({
-    sub: user.id,
-    email: user.email,
-  });
+    let payload: { sub: string; email: string };
+    try {
+      const decoded = verifyAccessToken(twoFactorToken);
+      if (decoded.kind !== "2fa_pending") {
+        throw httpError(401, "Invalid two-factor token");
+      }
+      payload = { sub: decoded.sub, email: decoded.email };
+    } catch (e) {
+      if (isAppError(e)) {
+        throw e;
+      }
+      throw httpError(401, "Invalid or expired two-factor token");
+    }
 
-  res.json({
-    accessToken: token,
-    tokenType: "Bearer",
-    expiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
-    user: publicUserJson(user),
-  });
-});
+    const user = await prisma.user.findFirst({
+      where: { id: payload.sub, email: payload.email, active: true },
+      include: userInclude,
+    });
 
-authRouter.get("/me", requireAuth, async (req: AuthedRequest, res) => {
-  const auth = req.auth;
-  if (!auth) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+    if (!user || !user.totpEnabled || !user.totpSecret) {
+      throw httpError(401, "Two-factor authentication is not active for this account");
+    }
 
-  const user = await prisma.user.findFirst({
-    where: { id: auth.sub, active: true },
-    include: userInclude,
-  });
+    if (!verifyTotpCode(user.totpSecret, code)) {
+      throw httpError(401, "Invalid authenticator code");
+    }
 
-  if (!user) {
-    res.status(401).json({ error: "User not found" });
-    return;
-  }
+    const token = signAccessToken({
+      sub: user.id,
+      email: user.email,
+    });
 
-  res.json({
-    user: publicUserJson(user),
-  });
-});
+    res.json({
+      accessToken: token,
+      tokenType: "Bearer",
+      expiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
+      user: publicUserJson(user),
+    });
+  }),
+);
 
-authRouter.post("/totp/setup", requireAuth, async (req: AuthedRequest, res) => {
-  const auth = req.auth!;
-  const user = await prisma.user.findFirst({
-    where: { id: auth.sub, active: true },
-    select: { id: true, email: true, totpEnabled: true },
-  });
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  if (user.totpEnabled) {
-    res.status(409).json({ error: "Two-factor is already enabled. Disable it first to set up again." });
-    return;
-  }
+authRouter.get(
+  "/me",
+  requireAuth,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const auth = req.auth;
+    if (!auth) {
+      throw httpError(401, "Unauthorized");
+    }
 
-  const secret = generateTotpSecret();
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { totpSecret: secret, totpEnabled: false },
-  });
+    const user = await prisma.user.findFirst({
+      where: { id: auth.sub, active: true },
+      include: userInclude,
+    });
 
-  const otpauthUrl = buildOtpauthUrl(user.email, TOTP_ISSUER(), secret);
-  res.json({
-    secret,
-    otpauthUrl,
-    issuer: TOTP_ISSUER(),
-    label: user.email,
-  });
-});
+    if (!user) {
+      throw httpError(401, "User not found");
+    }
 
-authRouter.post("/totp/enable", requireAuth, async (req: AuthedRequest, res) => {
-  const parsed = totpEnableSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  const auth = req.auth!;
-  const user = await prisma.user.findFirst({
-    where: { id: auth.sub, active: true },
-    include: userInclude,
-  });
-  if (!user?.totpSecret) {
-    res.status(400).json({ error: "Run setup first (POST /auth/totp/setup)" });
-    return;
-  }
-  if (user.totpEnabled) {
-    res.status(409).json({ error: "Two-factor is already enabled" });
-    return;
-  }
-  if (!verifyTotpCode(user.totpSecret, parsed.data.code)) {
-    res.status(401).json({ error: "Invalid authenticator code" });
-    return;
-  }
+    res.json({
+      user: publicUserJson(user),
+    });
+  }),
+);
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { totpEnabled: true },
-  });
+authRouter.post(
+  "/totp/setup",
+  requireAuth,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const auth = req.auth!;
+    const user = await prisma.user.findFirst({
+      where: { id: auth.sub, active: true },
+      select: { id: true, email: true, totpEnabled: true },
+    });
+    if (!user) {
+      throw httpError(404, "User not found");
+    }
+    if (user.totpEnabled) {
+      throw httpError(409, "Two-factor is already enabled. Disable it first to set up again.");
+    }
 
-  const fresh = await prisma.user.findFirst({
-    where: { id: user.id },
-    include: userInclude,
-  });
-  res.json({ ok: true, user: fresh ? publicUserJson(fresh) : undefined });
-});
+    const secret = generateTotpSecret();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { totpSecret: secret, totpEnabled: false },
+    });
 
-authRouter.post("/totp/disable", requireAuth, async (req: AuthedRequest, res) => {
-  const parsed = totpDisableSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  const auth = req.auth!;
-  const user = await prisma.user.findFirst({
-    where: { id: auth.sub, active: true },
-    select: { id: true, passwordHash: true },
-  });
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  if (!(await verifyPassword(parsed.data.password, user.passwordHash))) {
-    res.status(401).json({ error: "Invalid password" });
-    return;
-  }
+    const otpauthUrl = buildOtpauthUrl(user.email, TOTP_ISSUER(), secret);
+    res.json({
+      secret,
+      otpauthUrl,
+      issuer: TOTP_ISSUER(),
+      label: user.email,
+    });
+  }),
+);
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { totpSecret: null, totpEnabled: false },
-  });
+authRouter.post(
+  "/totp/enable",
+  requireAuth,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const parsed = totpEnableSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
+    }
+    const auth = req.auth!;
+    const user = await prisma.user.findFirst({
+      where: { id: auth.sub, active: true },
+      include: userInclude,
+    });
+    if (!user?.totpSecret) {
+      throw httpError(400, "Run setup first (POST /auth/totp/setup)");
+    }
+    if (user.totpEnabled) {
+      throw httpError(409, "Two-factor is already enabled");
+    }
+    if (!verifyTotpCode(user.totpSecret, parsed.data.code)) {
+      throw httpError(401, "Invalid authenticator code");
+    }
 
-  res.json({ ok: true });
-});
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { totpEnabled: true },
+    });
+
+    const fresh = await prisma.user.findFirst({
+      where: { id: user.id },
+      include: userInclude,
+    });
+    res.json({ ok: true, user: fresh ? publicUserJson(fresh) : undefined });
+  }),
+);
+
+authRouter.post(
+  "/totp/disable",
+  requireAuth,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const parsed = totpDisableSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
+    }
+    const auth = req.auth!;
+    const user = await prisma.user.findFirst({
+      where: { id: auth.sub, active: true },
+      select: { id: true, passwordHash: true },
+    });
+    if (!user) {
+      throw httpError(404, "User not found");
+    }
+    if (!(await verifyPassword(parsed.data.password, user.passwordHash))) {
+      throw httpError(401, "Invalid password");
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { totpSecret: null, totpEnabled: false },
+    });
+
+    res.json({ ok: true });
+  }),
+);

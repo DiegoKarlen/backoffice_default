@@ -26,13 +26,11 @@ Copy `.env.example` to `api/.env`. Required: `DATABASE_URL`, `JWT_SECRET` (min 1
 | Variable | Purpose |
 |----------|---------|
 | `CORS_ORIGINS` | Comma-separated allowed browser origins |
-| `BINGO_DISPLAY_DRAW_SECRET` | Shared key for Live draw-ball / stop |
-| `LIVE_DRAW_AUTH_OPTIONAL` | Default `true` when `NODE_ENV` ≠ `production` |
 | `AUTH_LOGIN_RATE_LIMIT_*` | Login brute-force limits |
 | `UPCOMING_CACHE_TTL_MS` | Cache TTL for `/public/bingos/upcoming` (0 = off, default 10000) |
 | `SSE_BALL_DELTA` | `1` / `true` emits extra `ball_delta` SSE events (clients may ignore; default off) |
 
-Display app: set `VITE_BINGO_DISPLAY_DRAW_SECRET` to the same value as `BINGO_DISPLAY_DRAW_SECRET`.
+Live ball marking uses authenticated `POST /backoffice/bingos/live/draw-ball` from the backoffice home page.
 
 ### Before refactors (regression)
 

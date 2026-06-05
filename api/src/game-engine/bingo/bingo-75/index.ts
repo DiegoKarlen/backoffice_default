@@ -13,3 +13,5 @@ export * from "./engine.js";
 export * from "./figures.js";
 export * from "./player-card.js";
 export * from "./prize-evaluator.js";
+export * from "./prize-evaluation.logic.js";
+export * from "./prize-evaluation.repo.js";

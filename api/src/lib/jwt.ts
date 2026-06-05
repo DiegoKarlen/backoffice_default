@@ -1,8 +1,8 @@
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../config/env.js";
 
-/** Backoffice `User` tokens use `user` (default). Public `Player` tokens use `player`. Display operator uses `display`. */
-export type TokenKind = "user" | "player" | "2fa_pending" | "display";
+/** Backoffice `User` tokens use `user` (default). Public `Player` tokens use `player`. */
+export type TokenKind = "user" | "player" | "2fa_pending";
 
 export type AccessPayload = {
   sub: string;
@@ -22,15 +22,6 @@ export function signPlayerAccessToken(payload: { sub: string; email: string }): 
   return signAccessToken({ ...payload, kind: "player" });
 }
 
-/** Short-lived JWT after correct password when TOTP is enabled (not valid for `requireAuth`). */
-export function signDisplayOperatorToken(): string {
-  return signAccessToken({
-    sub: "bingo-display-operator",
-    email: "display-operator@internal",
-    kind: "display",
-  });
-}
-
 export function signTwoFactorPendingToken(payload: { sub: string; email: string }): string {
   const secret = env.jwtSecret;
   const expiresIn = env.jwt2faExpiresIn as SignOptions["expiresIn"];
@@ -48,13 +39,7 @@ export function verifyAccessToken(token: string): AccessPayload {
   if (typeof sub !== "string" || typeof email !== "string") {
     throw new Error("Invalid token payload");
   }
-  if (
-    kind !== undefined &&
-    kind !== "user" &&
-    kind !== "player" &&
-    kind !== "2fa_pending" &&
-    kind !== "display"
-  ) {
+  if (kind !== undefined && kind !== "user" && kind !== "player" && kind !== "2fa_pending") {
     throw new Error("Invalid token payload");
   }
   return { sub, email, kind: kind as TokenKind | undefined };
