@@ -49,6 +49,49 @@
 }
 
 /* Home — upcoming bingos */
+.bo-home-live {
+  margin: 0 0 16px;
+}
+
+.bo-home-live-picker {
+  display: grid;
+  grid-template-columns: repeat(var(--bo-live-cols, 15), minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.bo-home-live-ball {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 4px 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-card);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.bo-home-live-ball.is-available:hover:not(:disabled) {
+  border-color: var(--accent, #2563eb);
+  background: var(--bg-subtle, rgba(37, 99, 235, 0.06));
+}
+
+.bo-home-live-ball.is-drawn {
+  opacity: 0.45;
+  cursor: default;
+  background: var(--bg-subtle, rgba(0, 0, 0, 0.04));
+}
+
+.bo-home-live-ball.is-locked,
+.bo-home-live-ball:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .bo-home-bingo { margin: 8px 0 26px; }
 .bo-home-bingo__grid {
   display: grid;
@@ -118,11 +161,51 @@
   color: var(--t-base);
 }
 
+.bo-home-next__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 4px;
+}
+
 .bo-home-next__meta {
   font-size: 13px;
   color: var(--t-muted);
   line-height: 1.45;
   max-width: 52ch;
+}
+
+.bo-home-draw-mode {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.bo-home-draw-mode--live {
+  background: color-mix(in oklab, var(--teal, #0d9488) 16%, transparent);
+  color: var(--teal, #0d9488);
+  border: 1px solid color-mix(in oklab, var(--teal, #0d9488) 35%, transparent);
+}
+
+.bo-home-draw-mode--virtual {
+  background: color-mix(in oklab, var(--accent, #2563eb) 10%, transparent);
+  color: var(--t-muted);
+  border: 1px solid var(--border-soft);
+}
+
+.bo-home-upcoming__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
 }
 
 .bo-home-badge {
@@ -915,26 +998,112 @@
   line-height: 1.35;
 }
 
-.bo-round-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+.bo-round-card__prizes-section {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.bo-round-card__prizes-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .bo-round-card__prizes-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  /* Premio fijo: solo card Figuras → ancho completo (sin hueco del Pozo). */
+  .bo-round-card__prizes-grid .bo-round-prize-card:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.bo-round-prize-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-card);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.bo-round-prize-card__head {
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-soft);
-}
-
-.bo-round-card__balls-section {
-  margin-top: 4px;
-}
-
-.bo-round-card__balls-title {
-  margin: 0 0 8px;
+  background: var(--bg-subtle, rgba(0, 0, 0, 0.03));
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--t-muted);
+}
+
+.bo-round-prize-card__body {
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.bo-round-card__pool-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-round-card__pool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.bo-round-card__pool-row-label {
+  color: var(--t-muted);
+}
+
+.bo-round-card__pool-row-value {
+  color: var(--t-base);
+  font-weight: 500;
+}
+
+.bo-round-card__pool-row--total {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.bo-round-card__pool-row--total .bo-round-card__pool-row-label,
+.bo-round-card__pool-row--total .bo-round-card__pool-row-value {
+  font-weight: 600;
+  color: var(--t-base);
+}
+
+.bo-round-card__pool-row--total .bo-round-card__pool-row-value {
+  font-size: 15px;
+}
+
+.bo-round-card__prize-table {
+  margin: 0;
+}
+
+.bo-round-card__payout {
+  font-weight: 600;
+  color: var(--t-base);
+}
+
+.bo-round-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bo-round-card > .bo-round-prize-card {
+  margin-top: 12px;
 }
 
 .bo-round-detail-dialog {

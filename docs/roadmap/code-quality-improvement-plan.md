@@ -280,14 +280,20 @@ Relacionado: `docs/status/product-progress.md` (alcance funcional), `docs/game-e
 | Q4.1–Q4.3 | Hecho | `docs/architecture.md`, `live-session-registry.ts`, bootstrap en `index.ts` |
 | Q4.4–Q4.5 | Pendiente | SSE delta, spike Redis |
 | Q5.1–Q5.4 | Hecho | `bingo-card-grid`, `errors` + `errorHandler`, `logger` |
-| Q5.3 rutas | Parcial | `errorHandler` global; rutas aún con try/catch local |
+| Q5.3 rutas | Hecho | Todas las rutas API (incl. `bingo-rounds.ts`): `asyncHandler` + `httpError`/`zodFlattenError`; SSE conserva guard `headersSent` |
 | Q6.1–Q6.5 | Hecho | `bingo-crud.service`, `bingo-rounds.ts`, `bingos.ts` ~240 líneas |
 | Q7.3 | Hecho | API solo BINGO_75; UI sin opción 90 |
-| Q7.1–Q7.2 | Pendiente | Partir live-session / prize repo |
+| Q7.1 | Hecho | `live-scheduler.ts` + `live-session-config/types`; sesión = draw/SSE |
+| Q7.2 | Hecho | `prize-evaluation.repo.ts` + `.logic.ts`; `prize-evaluator.ts` orquesta |
 | Q8.2 | Hecho | Webpack solo páginas producto (`BO_INCLUDE_ADMINATOR_DEMO=1` para demo) |
-| Q8.3–Q8.5 | Pendiente | Partir bingo-admin / admin-pages |
-| Q9.1–Q9.5 | Parcial | shared + tests; `bo-escape.js` en bingo-admin |
-| Q10 | Parcial | `lib/dom`, `lib/format`; main.ts ~1070 líneas |
+| Q8.3–Q8.4 | Hecho | `bingo-admin/*`, `admin-pages/*` + scripts split |
+| Q8.5 | Hecho | Webpack `shared-ts` rule + `bo-escape` → `@shared` |
+| Q9.1–Q9.3 | Hecho | `bingo-types.ts`, `http-client.ts`; portal usa `createApiClient` |
+| Q9.4 | Hecho | `bingo-display/api.ts` importa tipos desde `@shared` |
+| Q9.5 | Hecho | `bo-shared.js` + `bo-api` → `createApiClient`; money/escape desde `@shared` |
+| Q10.1 | Hecho | portal `views/*` + `app.ts` |
+| Q10.2 | Hecho | `live/controller.ts`, `display/markup.ts`, `main.ts` delgado (~4 líneas) |
+| Q10.3 | Hecho | Backoff exponencial en `@shared/sse`; `live-sse.ts` portal + `live/sse.ts` display |
 | Q11.1–Q11.2 | Hecho | ESLint + CI |
 | Q12.1 | Hecho | Cache upcoming TTL 10s + `invalidateUpcomingCache` |
 | Q12.3 | Hecho | Reembolso cancelación en una transacción |

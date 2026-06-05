@@ -17,8 +17,6 @@ function parseOrigins(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
-const isProduction = process.env.NODE_ENV === "production";
-
 const envSchema = z.object({
   NODE_ENV: z.string().optional(),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
@@ -32,8 +30,6 @@ const envSchema = z.object({
     .optional()
     .transform((v) => (v ? v.replace(/\/$/, "") : undefined)),
   CORS_ORIGINS: z.string().optional(),
-  BINGO_DISPLAY_DRAW_SECRET: z.string().min(8).optional(),
-  LIVE_DRAW_AUTH_OPTIONAL: boolFromEnv,
   AUTH_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(30),
   AUTH_LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900_000),
   UPCOMING_CACHE_TTL_MS: z.coerce.number().int().min(0).default(10_000),
@@ -48,8 +44,6 @@ export type AppEnv = {
   jwt2faExpiresIn: string;
   publicBingoDisplayOrigin?: string;
   corsOrigins: string[];
-  bingoDisplayDrawSecret?: string;
-  liveDrawAuthOptional: boolean;
   authLoginRateLimitMax: number;
   authLoginRateLimitWindowMs: number;
   upcomingCacheTtlMs: number;
@@ -78,11 +72,6 @@ function buildEnv(): AppEnv {
   const corsFromEnv = parseOrigins(e.CORS_ORIGINS);
   const corsOrigins = [...new Set([...corsFromEnv, ...defaultOrigins])];
 
-  const liveDrawAuthOptional = parseBool(
-    e.LIVE_DRAW_AUTH_OPTIONAL,
-    !isProduction,
-  );
-
   return {
     port: e.PORT,
     databaseUrl: e.DATABASE_URL,
@@ -91,8 +80,6 @@ function buildEnv(): AppEnv {
     jwt2faExpiresIn: e.JWT_2FA_EXPIRES_IN,
     publicBingoDisplayOrigin: e.PUBLIC_BINGO_DISPLAY_ORIGIN,
     corsOrigins,
-    bingoDisplayDrawSecret: e.BINGO_DISPLAY_DRAW_SECRET,
-    liveDrawAuthOptional,
     authLoginRateLimitMax: e.AUTH_LOGIN_RATE_LIMIT_MAX,
     authLoginRateLimitWindowMs: e.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS,
     upcomingCacheTtlMs: e.UPCOMING_CACHE_TTL_MS,

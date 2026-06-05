@@ -1,93 +1,16 @@
+import type {
+  BingoFigure,
+  LivePhase,
+  LiveSnapshot,
+  OccurrencePrize,
+  PublicRoom,
+  UpcomingBingosResponse,
+} from "@shared/index.ts";
 import { publicBingosPath } from "./config.js";
-import { ensureDisplayOperatorAuth, liveDrawRequestHeaders } from "./live-auth.js";
 
-export type BingoFigure =
-  | "LINE"
-  | "DOUBLE_LINE"
-  | "LETTER_B"
-  | "LETTER_I"
-  | "LETTER_N"
-  | "LETTER_G"
-  | "LETTER_O"
-  | "PERIMETER"
-  | "FULL_HOUSE";
-
-export type OccurrencePrize = {
-  figure: BingoFigure;
-  amount: string;
-  displayAmount?: string;
-};
-
-export type Occurrence = {
-  bingoId: string;
-  name: string;
-  bingoType: string;
-  prizeMode?: string;
-  cardPrice: string;
-  startsAt: string;
-  startsAtMs: number;
-  prizes: OccurrencePrize[];
-  /** Número de partida (backend); puede ser null si aún no hay fila en BingoRound */
-  roundSequence: number | null;
-};
-
-export type UpcomingResponse = {
-  serverTime: string;
-  next: Occurrence | null;
-  upcoming: Occurrence[];
-};
-
-export type LivePhase = "idle" | "drawing";
-
-export type LiveSnapshot = {
-  phase: LivePhase;
-  serverTime: string;
-  drawIntervalMs: number;
-  roomSlug: string;
-  roomTitle: string;
-  nextScheduledAt: string | null;
-  nextName: string | null;
-  nextRoundSequence: number | null;
-  current: null | {
-    bingoId: string;
-    roundId: string;
-    roundSequence: number;
-    name: string;
-    bingoType: string;
-    drawn: number[];
-    lastBall: number | null;
-    remainingInQueue: number;
-    remainingBallNumbers: number[];
-    totalBalls: number;
-    progress: number;
-    scheduledStartsAt: string;
-    drawMode: "VIRTUAL" | "LIVE";
-    /** false tras cartón lleno / fin de partida (Live). */
-    canMarkLiveBall?: boolean;
-    prizes: OccurrencePrize[];
-  };
-};
-
-/** Bingo Live: marca bola sorteada (requiere auth salvo `LIVE_DRAW_AUTH_OPTIONAL` en API). */
-export async function postDrawBall(number: number): Promise<void> {
-  await ensureDisplayOperatorAuth();
-  const url = publicBingosPath("/live/draw-ball");
-  const res = await fetch(url, {
-    method: "POST",
-    headers: liveDrawRequestHeaders(),
-    body: JSON.stringify({ number }),
-  });
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `Draw ball: ${res.status}`);
-  }
-}
-
-export type PublicRoom = {
-  id: string;
-  name: string;
-  slug: string;
-};
+export type { BingoFigure, LivePhase, LiveSnapshot, OccurrencePrize, PublicRoom };
+export type Occurrence = UpcomingBingosResponse["upcoming"][number];
+export type UpcomingResponse = UpcomingBingosResponse;
 
 export async function fetchPublicRooms(): Promise<PublicRoom[]> {
   const url = publicBingosPath("/rooms");
@@ -97,7 +20,10 @@ export async function fetchPublicRooms(): Promise<PublicRoom[]> {
   return data.rooms ?? [];
 }
 
-export async function fetchUpcoming(params?: { limit?: number; horizonDays?: number }): Promise<UpcomingResponse> {
+export async function fetchUpcoming(params?: {
+  limit?: number;
+  horizonDays?: number;
+}): Promise<UpcomingResponse> {
   const extra = new URLSearchParams();
   if (params?.limit != null) extra.set("limit", String(params.limit));
   if (params?.horizonDays != null) extra.set("horizonDays", String(params.horizonDays));

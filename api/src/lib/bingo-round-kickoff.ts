@@ -1,5 +1,5 @@
 import { BingoRoundStatus } from "@prisma/client";
-import { BingoRoundCancelReason } from "./bingo-round-cancellation.js";
+import { BingoRoundCancelReason, type BingoRoundCancelReasonCode } from "./bingo-round-cancellation.js";
 import { prisma } from "./prisma.js";
 
 /** Venta abierta solo mientras la partida está programada y no llegó `startsAt`. */
@@ -19,15 +19,22 @@ export async function countSoldCartons(bingoRoundId: string): Promise<number> {
 }
 
 /** Solo desde `SCHEDULED` → evita marcar `DRAWING` una partida que no sorteará. */
-export async function cancelRoundForMinCartons(bingoRoundId: string): Promise<boolean> {
+export async function cancelScheduledRound(
+  bingoRoundId: string,
+  cancellationReason: BingoRoundCancelReasonCode,
+): Promise<boolean> {
   const result = await prisma.bingoRound.updateMany({
     where: { id: bingoRoundId, status: BingoRoundStatus.SCHEDULED },
     data: {
       status: BingoRoundStatus.CANCELLED,
-      cancellationReason: BingoRoundCancelReason.MIN_CARTONS_NOT_MET,
+      cancellationReason,
     },
   });
   return result.count > 0;
+}
+
+export async function cancelRoundForMinCartons(bingoRoundId: string): Promise<boolean> {
+  return cancelScheduledRound(bingoRoundId, BingoRoundCancelReason.MIN_CARTONS_NOT_MET);
 }
 
 /** Transición atómica `SCHEDULED` → `DRAWING` tras validar cupo mínimo. */

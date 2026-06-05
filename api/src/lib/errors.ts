@@ -1,14 +1,22 @@
 import type { ZodError } from "zod";
 
+type AppErrorOptions = { code?: string; jsonBody?: Record<string, unknown> };
+
 export class AppError extends Error {
   readonly status: number;
   readonly code?: string;
+  readonly jsonBody?: Record<string, unknown>;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, codeOrOptions?: string | AppErrorOptions) {
     super(message);
     this.name = "AppError";
     this.status = status;
-    this.code = code;
+    if (typeof codeOrOptions === "string") {
+      this.code = codeOrOptions;
+    } else if (codeOrOptions) {
+      this.code = codeOrOptions.code;
+      this.jsonBody = codeOrOptions.jsonBody;
+    }
   }
 }
 
@@ -25,6 +33,9 @@ export function zodErrorMessage(err: ZodError): string {
 
 export function errorStatusAndMessage(err: unknown): { status: number; body: Record<string, unknown> } {
   if (isAppError(err)) {
+    if (err.jsonBody) {
+      return { status: err.status, body: err.jsonBody };
+    }
     return {
       status: err.status,
       body: { error: err.message, ...(err.code ? { code: err.code } : {}) },

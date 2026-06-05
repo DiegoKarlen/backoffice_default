@@ -29,7 +29,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://test:test@localhost:5432/backoffice_test?schema=public
       JWT_SECRET: ci-test-jwt-secret-min-16-chars
-      LIVE_DRAW_AUTH_OPTIONAL: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -35,6 +35,21 @@
             <select id="bo-home-room" class="input bo-home-roombar__select"></select>
           </div>
 
+          <section class="bo-home-live card" id="bo-home-live" hidden aria-labelledby="bo-home-live-title">
+            <div class="card-head" style="margin-bottom: 12px; padding-bottom: 12px;">
+              <div class="card-title-wrap">
+                <span class="eyebrow" data-i18n="home.liveDrawEyebrow"></span>
+                <h2 class="card-title" id="bo-home-live-title" data-i18n="home.liveDrawTitle"></h2>
+              </div>
+            </div>
+            <p class="field-help" id="bo-home-live-meta" hidden></p>
+            <p class="field-help" id="bo-home-live-status" data-i18n="home.liveDrawStatusIdle"></p>
+            <div id="bo-home-live-picker-wrap" hidden>
+              <p class="field-help" id="bo-home-live-hint"></p>
+              <div class="bo-home-live-picker" id="bo-home-live-picker" role="group" aria-label="Bolillas"></div>
+            </div>
+          </section>
+
           <section class="bo-home-bingo" id="bo-home-bingo" aria-label="Bingos">
             <div class="bo-home-bingo__grid">
               <div class="bo-home-next" id="bo-home-next" hidden>
@@ -44,7 +59,10 @@
                     <div>
                       <div class="eyebrow" data-i18n="home.bingoNextEyebrow"></div>
                       <div class="bo-home-next__title" id="bo-home-next-title">—</div>
-                      <div class="bo-home-next__meta" id="bo-home-next-meta">—</div>
+                      <div class="bo-home-next__meta-row">
+                        <div class="bo-home-next__meta" id="bo-home-next-meta">—</div>
+                        <span class="bo-home-draw-mode tag" id="bo-home-next-draw-mode" hidden></span>
+                      </div>
                     </div>
                     <div class="bo-home-badge" id="bo-home-next-badge">75</div>
                   </div>

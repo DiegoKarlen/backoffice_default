@@ -1,4 +1,10 @@
+import { createApiClient } from "@shared/http-client.js";
 import { getApiBase, getToken } from "./bo-config.js";
+
+const { request: apiRequest } = createApiClient({
+  baseUrl: getApiBase,
+  getToken,
+});
 
 export async function loginRequest(body) {
   const url = `${getApiBase().replace(/\/$/, "")}/auth/login`;
@@ -32,30 +38,10 @@ export async function loginTotpRequest(body) {
 }
 
 async function apiJson(path, options = {}) {
-  const url = `${getApiBase().replace(/\/$/, "")}${path}`;
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-  const t = getToken();
-  if (t) headers.Authorization = `Bearer ${t}`;
-  const res = await fetch(url, {
+  return apiRequest(path, {
     cache: "no-store",
     ...options,
-    headers,
   });
-  const text = await res.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
-  }
-  if (!res.ok) {
-    const msg = data?.error || data?.message || res.statusText || "Request failed";
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-  }
-  return data;
 }
 
 export const api = {
@@ -149,6 +135,24 @@ export const api = {
       }
       const s = q.toString();
       return apiJson(`/backoffice/bingos/upcoming${s ? `?${s}` : ""}`);
+    },
+    liveState: (query) => {
+      const q = new URLSearchParams();
+      q.set("roomSlug", String(query.roomSlug).trim());
+      return apiJson(`/backoffice/bingos/live/state?${q}`);
+    },
+    liveDrawBall: (query, number) => {
+      const q = new URLSearchParams();
+      q.set("roomSlug", String(query.roomSlug).trim());
+      return apiJson(`/backoffice/bingos/live/draw-ball?${q}`, {
+        method: "POST",
+        body: JSON.stringify({ number }),
+      });
+    },
+    liveStop: (query) => {
+      const q = new URLSearchParams();
+      q.set("roomSlug", String(query.roomSlug).trim());
+      return apiJson(`/backoffice/bingos/live/stop?${q}`, { method: "POST", body: "{}" });
     },
   },
 
