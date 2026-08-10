@@ -10,11 +10,56 @@
  *   npx tsx scripts/run-tests.mts --list
  */
 import { spawnSync } from "node:child_process";
-import { globSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const apiRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function globToRegExp(glob: string): RegExp {
+  const normalized = glob.replace(/\\/g, "/");
+  let re = "";
+  for (let i = 0; i < normalized.length; ) {
+    if (normalized[i] === "*" && normalized[i + 1] === "*") {
+      if (normalized[i + 2] === "/") {
+        re += "(?:.*/)?";
+        i += 3;
+      } else {
+        re += ".*";
+        i += 2;
+      }
+    } else if (normalized[i] === "*") {
+      re += "[^/]*";
+      i += 1;
+    } else {
+      re += normalized[i].replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+      i += 1;
+    }
+  }
+  return new RegExp(`^${re}$`);
+}
+
+function globSync(pattern: string, opts: { cwd: string }): string[] {
+  const cwd = opts.cwd;
+  const re = globToRegExp(pattern.replace(/\\/g, "/"));
+  const out: string[] = [];
+
+  const walk = (relDir: string) => {
+    const absDir = path.join(cwd, relDir);
+    for (const name of readdirSync(absDir)) {
+      const rel = relDir ? `${relDir}/${name}` : name;
+      const abs = path.join(cwd, rel);
+      if (statSync(abs).isDirectory()) {
+        walk(rel);
+      } else if (re.test(rel.replace(/\\/g, "/"))) {
+        out.push(rel.replace(/\\/g, "/"));
+      }
+    }
+  };
+
+  walk("");
+  return out;
+}
 
 const SUITES: Record<string, { pattern: string; label: string }> = {
   all: { pattern: "tests/**/*.test.ts", label: "All API tests" },

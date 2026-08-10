@@ -1,4 +1,4 @@
-import type { BingoFigure } from "@prisma/client";
+import type { BingoFigure, PrizeSettlementTiming } from "@prisma/client";
 import { prisma } from "../../../lib/prisma.js";
 
 export type BingoPrizeRow = {
@@ -38,6 +38,16 @@ export async function loadBingoJackpotMaxBall(bingoId: string): Promise<number |
   });
   if (!row?.jackpotEnabled || !row.jackpotMaxBall) return null;
   return row.jackpotMaxBall;
+}
+
+export async function loadBingoPrizeSettlementTiming(
+  bingoId: string,
+): Promise<PrizeSettlementTiming> {
+  const row = await prisma.bingo.findUnique({
+    where: { id: bingoId },
+    select: { prizeSettlementTiming: true },
+  });
+  return row?.prizeSettlementTiming ?? "AT_ROUND_END";
 }
 
 export async function loadBingoPrizes(bingoId: string): Promise<BingoPrizeRow[]> {

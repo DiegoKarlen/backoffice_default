@@ -6,6 +6,7 @@ import type {
   BingoType,
   Prisma,
   PrizePayoutMode,
+  PrizeSettlementTiming,
   RoomStatus,
 } from "@prisma/client";
 
@@ -23,6 +24,7 @@ export function serializeBingo(b: {
   status: BingoStatus;
   bingoType: BingoType;
   prizePayoutMode: PrizePayoutMode;
+  prizeSettlementTiming: PrizeSettlementTiming;
   drawMode: BingoDrawMode;
   startDateTime: Date;
   endDateTime: Date | null;
@@ -52,6 +54,7 @@ export function serializeBingo(b: {
     status: b.status,
     bingoType: b.bingoType,
     prizePayoutMode: b.prizePayoutMode,
+    prizeSettlementTiming: b.prizeSettlementTiming,
     drawMode: b.drawMode,
     startDateTime: b.startDateTime,
     endDateTime: b.endDateTime,
