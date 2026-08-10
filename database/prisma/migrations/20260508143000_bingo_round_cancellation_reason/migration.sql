@@ -1,2 +1,2 @@
--- Legacy ordering: this migration originally ran before BingoRound existed.
--- Column is created in 20260510120000_bingo_rounds; kept as no-op for history.
+-- BingoRound is created in 20260507160750_bingo_rounds (before this migration).
+ALTER TABLE "BingoRound" ADD COLUMN IF NOT EXISTS "cancellationReason" TEXT;
