@@ -115,7 +115,7 @@ Objetivo: experiencia **clara y defendible** para jugador y operador, sin depend
 
 Objetivo: que las bolillas y los **cartones comprados** determinen premios de forma trazable.
 
-**Cerrado:** 2026-05-14 — **BINGO_75** en vivo: modelo y persistencia (3.1), motor de premios con `uniquePerRound` configurable (3.2) y reglas de negocio documentadas (3.3). Bingo 90: fuera de alcance.
+**Cerrado:** 2026-05-14 — **BINGO_75** en vivo: modelo y persistencia (3.1), motor de premios (3.2) y reglas de negocio documentadas (3.3). Bingo 90: fuera de alcance.
 
 ### 3.1 Modelo y datos
 
@@ -134,7 +134,7 @@ Objetivo: que las bolillas y los **cartones comprados** determinen premios de fo
 | Ítem | Estado | Notas |
 |------|--------|--------|
 | Tras cada bolilla (o al cierre): detectar cartones que cumplen figura | [x] | En vivo para **BINGO_75**: `evaluateRoundPrizesAfterBall` tras cada bolilla. |
-| Desempates / orden si varios ganan o varios premios | [x] | Orden figuras: LINE → PERIMETER → FULL_HOUSE. Por premio, `uniquePerRound` en BO (default sí): un ganador con desempate (`createdAt` → `cardIndex` → `id`); si no, todos los elegibles cobran. Ver `docs/game-engine.md` § Premios en vivo. |
+| Desempates / orden si varios ganan o varios premios | [x] | Orden figuras: LINE → PERIMETER → FULL_HOUSE. Cada figura se paga una vez por partida (primera bolilla); varios cartones en esa bolilla reparten según `prizePayoutMode`. Desempate: `createdAt` → `cardIndex` → `id`. Ver `docs/game-engine.md` § Premios en vivo. |
 | Integración con `creditPrizeToWinner` (idempotencia, no doble pago) | [x] | Crédito vía `creditPrizeToWinner` + idempotencia por existencia de `PrizePayout` (cartón + premio) y corte por premio ya pagado en la partida. |
 | Eventos SSE/display: “premio otorgado” en pantalla pública | [x] | `bingo-display` escucha `prize_awarded` |
 
@@ -146,7 +146,7 @@ Objetivo: que las bolillas y los **cartones comprados** determinen premios de fo
 |------|--------|--------|
 | ¿Se detiene el sorteo al primer premio mayor o siguen bolillas? | [x] | Siguen hasta **cartón lleno** (`FULL_HOUSE`): `evaluateRoundPrizesAfterBall` devuelve `true` y `live-session` hace `endRound()`. Premios menores (línea, perímetro) no cortan el sorteo. |
 | ¿`minPlayersToStart` cuenta jugadores únicos o cartones vendidos? | [x] | **Cartones vendidos** (`countSoldCartons` vs `minPlayersToStart` en `live-session` **antes** de `promoteRoundToDrawing`). |
-| ¿Premios configurados por bingo aplican en orden fijo? | [x] | Sí: LINE → PERIMETER → FULL_HOUSE. Ganadores por figura según `uniquePerRound` (único vs repetible) en cada `BingoPrize`. |
+| ¿Premios configurados por bingo aplican en orden fijo? | [x] | Sí: LINE → PERIMETER → FULL_HOUSE. Cada figura se paga una sola vez por partida (primera bolilla). |
 
 ---
 
@@ -181,7 +181,7 @@ Objetivo: confianza para release — automatizar reglas críticas y dejar una re
 | Ítem | Estado | Notas |
 |------|--------|--------|
 | Tests unitarios API (reglas figura, cartón, desempate, kickoff ronda) | [x] | `npm test` en `api/`: `figures.test.ts`, `player-card.test.ts`, `allocate-unique-fingerprint.test.ts`, `prize-winner-order.test.ts`, `bingo-round-kickoff.test.ts`. |
-| Tests de integración API (`prize-evaluator` + Prisma) | [x] | `prize-evaluator.integration.test.ts`: premio LINE `uniquePerRound` (un ganador vs dos), jugador inactivo omitido. Requiere `DATABASE_URL` (Postgres); si no conecta, los casos se marcan *skip* en el runner. |
+| Tests de integración API (`prize-evaluator` + Prisma) | [x] | Tests en `api/tests/integration/prizes/`: LINE (monto completo / dividido), jugador inactivo omitido. Requiere `DATABASE_URL` (Postgres); si no conecta, los casos se marcan *skip* en el runner. |
 | Tests E2E o de contrato (portal / BO / display) | [ ] | Flujos críticos según §1: login jugador, compra, SSE sorteo + `prize_awarded`, acreditación visible en wallet; BO acreditar saldo / actividad. Automatizar donde sea viable (Playwright o scripts). |
 | Checklist manual de regresión antes de release | [ ] | Basarse en §1.4 y §3: caso feliz, saldo insuficiente, partida cerrada/cancelada, premio único vs repetible, `minPlayersToStart`. Una pasada documentada por release. |
 | CI: ejecutar `npm test` (api) en pipeline | [ ] | Bloquear merge si fallan tests unitarios existentes. |

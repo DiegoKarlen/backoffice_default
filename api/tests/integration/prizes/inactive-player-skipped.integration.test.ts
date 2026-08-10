@@ -21,7 +21,7 @@ describe("[integration][prizes] inactive player omitted from payout", () => {
   it("only active player receives deferred win and payout", async (t) => {
     if (skipIfNoDatabase(t, db)) return;
     const suffix = `i-${Date.now()}`;
-    const fx = await createPrizeRoundFixture({ uniquePerRound: false, suffix });
+    const fx = await createPrizeRoundFixture({ suffix });
     try {
       await prisma.player.update({ where: { id: fx.playerAId }, data: { active: false } });
 

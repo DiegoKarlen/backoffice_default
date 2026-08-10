@@ -4,7 +4,6 @@ import { prisma } from "../../../lib/prisma.js";
 export type BingoPrizeRow = {
   id: string;
   figure: BingoFigure;
-  uniquePerRound: boolean;
 };
 
 export type RoundCardRow = {
@@ -32,11 +31,20 @@ export function cardPrizeKey(cardId: string, prizeId: string): string {
   return `${cardId}:${prizeId}`;
 }
 
+export async function loadBingoJackpotMaxBall(bingoId: string): Promise<number | null> {
+  const row = await prisma.bingo.findUnique({
+    where: { id: bingoId },
+    select: { jackpotEnabled: true, jackpotMaxBall: true },
+  });
+  if (!row?.jackpotEnabled || !row.jackpotMaxBall) return null;
+  return row.jackpotMaxBall;
+}
+
 export async function loadBingoPrizes(bingoId: string): Promise<BingoPrizeRow[]> {
   return prisma.bingoPrize.findMany({
     where: { bingoId },
     orderBy: { figure: "asc" },
-    select: { id: true, figure: true, uniquePerRound: true },
+    select: { id: true, figure: true },
   });
 }
 

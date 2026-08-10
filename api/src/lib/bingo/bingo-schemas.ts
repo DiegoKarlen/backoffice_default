@@ -11,7 +11,6 @@ import {
 export const prizeSchema = z.object({
   figure: z.nativeEnum(BingoFigure),
   amount: z.union([z.string(), z.number()]),
-  uniquePerRound: z.boolean().optional().default(true),
 });
 
 export const baseBingoBodySchema = z.object({
@@ -28,6 +27,9 @@ export const baseBingoBodySchema = z.object({
   minPlayersToStart: z.number().int().min(1).max(100_000).default(2),
   prizePayoutMode: z.nativeEnum(PrizePayoutMode).optional(),
   drawMode: z.nativeEnum(BingoDrawMode).optional(),
+  jackpotEnabled: z.boolean().optional().default(false),
+  jackpotMaxBall: z.number().int().min(2).max(90).optional().nullable(),
+  jackpotAmount: z.union([z.string(), z.number()]).optional().nullable(),
   prizes: z.array(prizeSchema).min(1),
 });
 

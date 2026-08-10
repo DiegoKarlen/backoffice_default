@@ -1,0 +1,440 @@
+{
+  "info": {
+    "_postman_id": "payments-backoffice-default",
+    "name": "Backoffice - Pagos (depósitos + webhooks)",
+    "description": "Pruebas del módulo de pagos: health, webhooks stub/mixer-gaming, flujo player.\n\n**Importar también:** `payments-local.postman_environment.json`\n\n**Orden sugerido (E2E stub):**\n1. Health API\n2. Player Register o Login\n3. List payment methods\n4. Initiate deposit (stub)\n5. Webhook stub success (local o ngrok)\n6. Get deposit by id\n7. Player wallet\n\nVariables que se guardan solas: `playerToken`, `depositId`, `externalRef`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "apiBase",
+      "value": "http://localhost:4001"
+    },
+    {
+      "key": "ngrokBase",
+      "value": "https://reboot-reexamine-ethics.ngrok-free.dev"
+    },
+    {
+      "key": "playerEmail",
+      "value": "deposit-test@example.com"
+    },
+    {
+      "key": "playerPassword",
+      "value": "TestPass123!"
+    },
+    {
+      "key": "playerUsername",
+      "value": "deposit_test"
+    },
+    {
+      "key": "playerToken",
+      "value": ""
+    },
+    {
+      "key": "depositId",
+      "value": ""
+    },
+    {
+      "key": "externalRef",
+      "value": ""
+    },
+    {
+      "key": "depositAmountCents",
+      "value": "100000"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Health",
+      "item": [
+        {
+          "name": "Health (local)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{apiBase}}/health"
+          }
+        },
+        {
+          "name": "Health (ngrok)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{ngrokBase}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Webhooks",
+      "item": [
+        {
+          "name": "GET webhook ping - mixer-gaming (local)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{apiBase}}/webhooks/payments/mixer-gaming"
+          }
+        },
+        {
+          "name": "GET webhook ping - mixer-gaming (ngrok)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{ngrokBase}}/webhooks/payments/mixer-gaming"
+          }
+        },
+        {
+          "name": "POST webhook stub - success (local)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Deposit completed', () => pm.expect(j.status).to.eql('COMPLETED'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depositId\": \"{{depositId}}\",\n  \"success\": true\n}"
+            },
+            "url": "{{apiBase}}/webhooks/payments/stub"
+          }
+        },
+        {
+          "name": "POST webhook stub - success (ngrok)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depositId\": \"{{depositId}}\",\n  \"success\": true\n}"
+            },
+            "url": "{{ngrokBase}}/webhooks/payments/stub"
+          }
+        },
+        {
+          "name": "POST webhook stub - failure (local)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depositId\": \"{{depositId}}\",\n  \"success\": false\n}"
+            },
+            "url": "{{apiBase}}/webhooks/payments/stub"
+          }
+        },
+        {
+          "name": "POST webhook mixer-gaming - success (local)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"success\": true,\n  \"transaction\": [\n    {\n      \"id\": {{externalRef}},\n      \"user_id\": 1,\n      \"currency\": \"ARS\",\n      \"transaction_type\": 1,\n      \"amount\": 1000.00,\n      \"payment_method\": 1\n    }\n  ]\n}"
+            },
+            "url": "{{apiBase}}/webhooks/payments/mixer-gaming"
+          }
+        },
+        {
+          "name": "POST webhook mixer-gaming - success (ngrok)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"success\": true,\n  \"transaction\": [\n    {\n      \"id\": {{externalRef}},\n      \"user_id\": 1,\n      \"currency\": \"ARS\",\n      \"transaction_type\": 1,\n      \"amount\": 1000.00,\n      \"payment_method\": 1\n    }\n  ]\n}"
+            },
+            "url": "{{ngrokBase}}/webhooks/payments/mixer-gaming"
+          }
+        },
+        {
+          "name": "POST webhook mixer-gaming - failure (ngrok)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"success\": false,\n  \"transaction\": [\n    {\n      \"id\": {{externalRef}},\n      \"user_id\": 1,\n      \"currency\": \"ARS\",\n      \"transaction_type\": 1,\n      \"amount\": 1000.00,\n      \"payment_method\": 1\n    }\n  ]\n}"
+            },
+            "url": "{{ngrokBase}}/webhooks/payments/mixer-gaming"
+          }
+        },
+        {
+          "name": "POST webhook idempotencia - repetir stub success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depositId\": \"{{depositId}}\",\n  \"success\": true\n}"
+            },
+            "url": "{{apiBase}}/webhooks/payments/stub"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Player (depósitos)",
+      "item": [
+        {
+          "name": "Register player",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  pm.collectionVariables.set('playerToken', j.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{playerEmail}}\",\n  \"username\": \"{{playerUsername}}\",\n  \"password\": \"{{playerPassword}}\"\n}"
+            },
+            "url": "{{apiBase}}/player/register"
+          }
+        },
+        {
+          "name": "Login player",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('playerToken', j.accessToken);",
+                  "pm.environment.set('playerToken', j.accessToken);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{playerEmail}}\",\n  \"password\": \"{{playerPassword}}\"\n}"
+            },
+            "url": "{{apiBase}}/player/login"
+          }
+        },
+        {
+          "name": "List payment methods",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{playerToken}}"
+              }
+            ],
+            "url": "{{apiBase}}/player/deposits/payment-methods"
+          }
+        },
+        {
+          "name": "Initiate deposit (stub-transfer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('depositId', j.depositId);",
+                  "pm.environment.set('depositId', j.depositId);",
+                  "pm.collectionVariables.set('externalRef', 'stub-' + j.depositId);",
+                  "pm.environment.set('externalRef', 'stub-' + j.depositId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{playerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amountCents\": {{depositAmountCents}},\n  \"paymentMethodId\": \"stub-transfer\",\n  \"providerId\": \"stub\"\n}"
+            },
+            "url": "{{apiBase}}/player/deposits"
+          }
+        },
+        {
+          "name": "Initiate deposit (mixer-gaming) — requiere credenciales",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  pm.collectionVariables.set('depositId', j.depositId);",
+                  "  pm.environment.set('depositId', j.depositId);",
+                  "  // externalRef = transaction.id de Mixer; completar manualmente tras initiate si la respuesta incluye providerPayload",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{playerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amountCents\": {{depositAmountCents}},\n  \"paymentMethodId\": \"1\",\n  \"providerId\": \"mixer-gaming\",\n  \"profile\": {\n    \"firstName\": \"Juan\",\n    \"lastName\": \"Perez\",\n    \"dni\": \"30123456\",\n    \"phone\": \"1122334455\",\n    \"phoneCode\": \"54\",\n    \"countryCode\": \"AR\"\n  }\n}"
+            },
+            "url": "{{apiBase}}/player/deposits"
+          }
+        },
+        {
+          "name": "Get deposit by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{playerToken}}"
+              }
+            ],
+            "url": "{{apiBase}}/player/deposits/{{depositId}}"
+          }
+        },
+        {
+          "name": "Player wallet",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{playerToken}}"
+              }
+            ],
+            "url": "{{apiBase}}/player/wallet"
+          }
+        }
+      ]
+    }
+  ]
+}

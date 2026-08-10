@@ -15,6 +15,7 @@ const SPA_FILES = new Set([
   "admin-rooms.html",
   "admin-bingos.html",
   "admin-players.html",
+  "admin-payment-methods.html",
 ]);
 
 function fileFromUrl(u) {

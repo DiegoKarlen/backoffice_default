@@ -467,6 +467,54 @@
 .bo-bingo-filters--list-align .btn {
   flex: 0 0 auto;
 }
+
+.bo-wallet-deposit-meta {
+  display: grid;
+  gap: 8px 16px;
+  margin: 0 0 16px;
+}
+
+.bo-wallet-deposit-meta__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 34%) 1fr;
+  gap: 8px 12px;
+  align-items: start;
+}
+
+.bo-wallet-deposit-meta__row dt {
+  margin: 0;
+  color: var(--t-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bo-wallet-deposit-meta__row dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.bo-wallet-deposit-audit {
+  margin-top: 10px;
+}
+
+.bo-wallet-deposit-pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  background: var(--bg-subtle, #f6f7f9);
+  border: 1px solid var(--border, #e2e4e9);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bo-wallet-deposit-fail {
+  color: var(--danger, #c0392b);
+}
+
 /* Bingo create/edit — tarjetas del template (como dashboard KPI / forms) */
 .bo-bingo-page {
   display: flex;
@@ -544,6 +592,22 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.bo-bingo-jackpot__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.bo-bingo-jackpot__fields .field {
+  margin: 0;
+}
+
+.bo-bingo-jackpot__fields .input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .bo-bingo-form__actions-card {
@@ -734,17 +798,6 @@
   border-bottom-color: var(--primary);
   outline: none;
   box-shadow: none;
-}
-
-.bo-bingo-prize-item__unique {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  white-space: nowrap;
-  font-size: 12px;
-  line-height: 1.2;
 }
 
 @media (max-width: 520px) {
@@ -1283,21 +1336,21 @@
 }
 
 /* Player wallet ledger — BO jugadores */
-.wallet-amt--in {
-  color: var(--success, #22c55e);
-}
-.wallet-amt--out {
-  color: var(--danger, #ef4444);
+.bo-wallet-detail-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
 }
 
-.bo-wallet-detail-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.bo-wallet-detail-stack span {
-  font-size: 13px;
+.bo-wallet-detail-ref {
+  font-size: 12px;
+  color: var(--t-muted);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Wallet transaction — cartón BINGO 75 modal (grilla amplia, similar a la primera versión) */

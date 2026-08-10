@@ -122,44 +122,56 @@
             <div id="bo-wallet-card-dialog-body" class="bo-wallet-card-dialog__body"></div>
           </div>
         </dialog>
+        <dialog id="bo-wallet-deposit-dialog" class="bo-wallet-card-dialog">
+          <div class="bo-wallet-card-dialog__inner">
+            <div class="bo-wallet-card-dialog__head">
+              <h3 class="bo-wallet-card-dialog__title" id="bo-wallet-deposit-dialog-title" data-i18n="players.walletDepositDetailTitle"></h3>
+              <button type="button" class="btn btn--ghost btn--sm" id="bo-wallet-deposit-dialog-close" data-i18n="players.walletCardDetailClose"></button>
+            </div>
+            <div id="bo-wallet-deposit-dialog-body" class="bo-wallet-card-dialog__body"></div>
+          </div>
+        </dialog>
         <input type="hidden" id="bo-player-wallet-player-id" value="" />
 
-        <section class="card" id="bo-player-activity-panel" hidden style="margin-bottom:18px;">
+        <section class="col-12 card" id="bo-player-activity-panel" hidden>
           <div class="card-head">
             <div class="card-title-wrap">
               <span class="eyebrow" data-i18n="playersExtra.breadcrumb"></span>
               <h2 class="card-title" data-i18n="playersExtra.activityTitle"></h2>
             </div>
           </div>
-          <div id="bo-player-wallet-wrap" style="margin-bottom:16px;">
-            <form id="bo-player-wallet-filters-form" class="bo-bingo-filters bo-bingo-filters--list-align" action="#" method="get" style="margin-bottom:12px;">
-              <div class="field field--underline">
-                <label class="field-label" for="bo-wallet-filter-type" data-i18n="players.walletColType"></label>
-                <select id="bo-wallet-filter-type" class="input input--underline" name="type"></select>
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="bo-wallet-filter-room" data-i18n="players.walletColRoom"></label>
-                <input id="bo-wallet-filter-room" class="input input--underline" type="search" autocomplete="off" name="room" data-i18n-placeholder="players.walletFilterRoomPlaceholder">
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="bo-wallet-filter-bingo" data-i18n="players.walletColBingo"></label>
-                <input id="bo-wallet-filter-bingo" class="input input--underline" type="search" autocomplete="off" name="bingo" data-i18n-placeholder="players.walletFilterBingoPlaceholder">
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="bo-wallet-filter-round" data-i18n="players.walletColRound"></label>
-                <input id="bo-wallet-filter-round" class="input input--underline" type="search" autocomplete="off" name="round" data-i18n-placeholder="players.walletFilterRoundPlaceholder">
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="bo-wallet-filter-from" data-i18n="players.walletFilterDateFrom"></label>
-                <input id="bo-wallet-filter-from" class="input input--underline" type="date" name="from">
-              </div>
-              <div class="field field--underline">
-                <label class="field-label" for="bo-wallet-filter-to" data-i18n="players.walletFilterDateTo"></label>
-                <input id="bo-wallet-filter-to" class="input input--underline" type="date" name="to">
-              </div>
-              <button type="submit" class="btn btn--ghost" id="bo-wallet-filter-apply" data-i18n="players.applyFilters"></button>
-            </form>
-            <div style="overflow:auto;">
+          <div id="bo-player-wallet-wrap">
+            <div class="bo-list-filters">
+              <form id="bo-player-wallet-filters-form" class="bo-bingo-filters bo-bingo-filters--list-align" action="#" method="get">
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-wallet-filter-type" data-i18n="players.walletColType"></label>
+                  <select id="bo-wallet-filter-type" class="input input--underline" name="type"></select>
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-wallet-filter-room" data-i18n="players.walletColRoom"></label>
+                  <input id="bo-wallet-filter-room" class="input input--underline" type="search" autocomplete="off" name="room" data-i18n-placeholder="players.walletFilterRoomPlaceholder">
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-wallet-filter-bingo" data-i18n="players.walletColBingo"></label>
+                  <input id="bo-wallet-filter-bingo" class="input input--underline" type="search" autocomplete="off" name="bingo" data-i18n-placeholder="players.walletFilterBingoPlaceholder">
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-wallet-filter-round" data-i18n="players.walletColRound"></label>
+                  <input id="bo-wallet-filter-round" class="input input--underline" type="search" autocomplete="off" name="round" data-i18n-placeholder="players.walletFilterRoundPlaceholder">
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-wallet-filter-from" data-i18n="players.walletFilterDateFrom"></label>
+                  <input id="bo-wallet-filter-from" class="input input--underline" type="date" name="from">
+                </div>
+                <div class="field field--underline">
+                  <label class="field-label" for="bo-wallet-filter-to" data-i18n="players.walletFilterDateTo"></label>
+                  <input id="bo-wallet-filter-to" class="input input--underline" type="date" name="to">
+                </div>
+                <button type="submit" class="btn btn--ghost" id="bo-wallet-filter-apply" data-i18n="players.applyFilters"></button>
+              </form>
+            </div>
+
+            <div id="bo-player-wallet-table-wrap" style="overflow:auto;">
               <table class="table">
                 <thead>
                   <tr>
@@ -170,7 +182,7 @@
                     <th data-i18n="players.walletColRound"></th>
                     <th data-i18n="players.walletColAmount"></th>
                     <th data-i18n="players.walletColBalanceAfter"></th>
-                    <th data-i18n="players.walletColDetail"></th>
+                    <th style="text-align:right;" data-i18n="players.walletColDetail"></th>
                   </tr>
                 </thead>
                 <tbody id="bo-player-wallet-tbody"></tbody>

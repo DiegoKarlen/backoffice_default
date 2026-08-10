@@ -2,11 +2,12 @@ import type { Request } from "express";
 import { BingoDrawMode, BingoRoundStatus, BingoStatus, type BingoRound, type Prisma } from "@prisma/client";
 import { BingoRoundCancelReason } from "../../lib/bingo-round-cancellation.js";
 import { buildUpcomingPayload, type UpcomingOccurrence } from "../../lib/bingo-upcoming.js";
-import { syncScheduledRoundsForBingo } from "../../lib/bingo-rounds-sync.js";
+import { roundStartsAtMs, syncScheduledRoundsForBingo } from "../../lib/bingo-rounds-sync.js";
 import { prisma } from "../../lib/prisma.js";
 import {
-  cancelRoundForMinCartons,
+  cancelRoundForMinPlayers,
   cancelScheduledRound,
+  countDistinctPlayersWithCartons,
   countSoldCartons,
   isTerminalRoundStatus,
   promoteRoundToDrawing,
@@ -153,16 +154,18 @@ export class BingoLiveScheduler {
     bingoId: string,
     startsAtMs: number,
   ): Promise<BingoRound | null> {
-    const startsAtDate = new Date(startsAtMs);
-    let round = await prisma.bingoRound.findFirst({
-      where: { bingoId, startsAt: startsAtDate },
-    });
+    const ms = roundStartsAtMs(startsAtMs);
+    const startsAtDate = new Date(ms);
+    const roundWhere = {
+      bingoId,
+      startsAt: { gte: new Date(ms), lt: new Date(ms + 1000) },
+    } as const;
+
+    let round = await prisma.bingoRound.findFirst({ where: roundWhere });
 
     if (!round) {
       await syncScheduledRoundsForBingo(bingoId);
-      round = await prisma.bingoRound.findFirst({
-        where: { bingoId, startsAt: startsAtDate },
-      });
+      round = await prisma.bingoRound.findFirst({ where: roundWhere });
     }
 
     if (!round) {
@@ -181,9 +184,7 @@ export class BingoLiveScheduler {
           },
         });
       } catch {
-        round = await prisma.bingoRound.findFirst({
-          where: { bingoId, startsAt: startsAtDate },
-        });
+        round = await prisma.bingoRound.findFirst({ where: roundWhere });
       }
     }
 
@@ -266,9 +267,12 @@ export class BingoLiveScheduler {
       return;
     }
 
-    const cartonCount = await countSoldCartons(round.id);
-    if (cartonCount < row.minPlayersToStart) {
-      const cancelled = await cancelRoundForMinCartons(round.id);
+    const [playerCount, cartonCount] = await Promise.all([
+      countDistinctPlayersWithCartons(round.id),
+      countSoldCartons(round.id),
+    ]);
+    if (playerCount < row.minPlayersToStart) {
+      const cancelled = await cancelRoundForMinPlayers(round.id);
       if (!cancelled) {
         this.markPlayedAndReschedule(occ.startsAtMs);
         return;
@@ -284,8 +288,9 @@ export class BingoLiveScheduler {
       }
       this.lastPlayedStartsAtMs = occ.startsAtMs;
       this.host.broadcast("round_cancelled", {
-        reason: "min_cartons_not_met",
+        reason: "min_players_not_met",
         minRequired: row.minPlayersToStart,
+        uniquePlayers: playerCount,
         soldCartons: cartonCount,
         roundId: round.id,
         bingoId: row.id,
@@ -320,6 +325,8 @@ export class BingoLiveScheduler {
         bingoType: row.bingoType,
         drawMode: row.drawMode,
         prizeMode: row.prizeMode,
+        jackpotEnabled: row.jackpotEnabled,
+        jackpotMaxBall: row.jackpotMaxBall,
         prizes: row.prizes.map((p) => ({
           figure: p.figure,
           amount: p.amount.toString(),

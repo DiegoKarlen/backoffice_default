@@ -10,6 +10,7 @@ import { api } from "../bo-api.js";
 import { t } from "../bo-i18n.js";
 import { initBingosPage } from "../bingo-admin.js";
 import { initPlayersPage } from "../player-admin.js";
+import { initPaymentMethodsPage } from "../payment-methods-admin.js";
 import { initRoomsPage } from "../room-admin.js";
 import { disposeHomePage, initHomePage } from "./home.js";
 import { initFunctionalitiesPage } from "./functionalities.js";
@@ -138,6 +139,18 @@ async function initAdminPagesWithFreshSession(page) {
       return;
     }
     void initPlayersPage();
+  } else if (page === "payment-methods") {
+    if (
+      !requirePageFunctionality(
+        "bo.payments.manage",
+        "[data-bo-payment-methods-wrap]",
+        "bo-payment-methods-msg",
+        "errors.noPermissionPayments",
+      )
+    ) {
+      return;
+    }
+    void initPaymentMethodsPage();
   } else if (page === "security") {
     initSecurityPage();
   }

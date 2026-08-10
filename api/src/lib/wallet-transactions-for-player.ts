@@ -12,6 +12,8 @@ export type WalletTransactionDetailJson = {
   figure?: string;
   roundSequence?: number | null;
   depositNote?: string | null;
+  depositId?: string | null;
+  depositExternalRef?: string | null;
 };
 
 export type WalletTransactionRowJson = {
@@ -207,7 +209,7 @@ export async function listWalletTransactionsForPlayer(params: {
           },
         },
       },
-      deposit: { select: { externalRef: true } },
+      deposit: { select: { id: true, externalRef: true } },
     },
   });
 
@@ -254,6 +256,8 @@ export async function listWalletTransactionsForPlayer(params: {
     } else if (t.deposit) {
       detail = {
         kind: "deposit",
+        depositId: t.deposit.id,
+        depositExternalRef: t.deposit.externalRef,
         depositNote: t.deposit.externalRef,
       };
     } else if (t.type === WalletTransactionType.ADJUSTMENT) {

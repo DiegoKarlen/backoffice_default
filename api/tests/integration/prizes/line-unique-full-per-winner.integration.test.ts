@@ -7,7 +7,7 @@ import { disconnectDatabase, isDatabaseAvailable, skipIfNoDatabase } from "../..
 import { row0DrawnNumbers } from "../../helpers/fixtures/card-cells.js";
 import { cleanupPrizeRoundFixture, createPrizeRoundFixture } from "../../helpers/fixtures/prize-round.js";
 
-describe("[integration][prizes] LINE uniquePerRound — full amount per winner at settlement", () => {
+describe("[integration][prizes] LINE — monto completo por ganador al liquidar", () => {
   let db = false;
 
   before(async () => {
@@ -21,7 +21,7 @@ describe("[integration][prizes] LINE uniquePerRound — full amount per winner a
   it("defers both winners then pays full LINE to each on settlement", async (t) => {
     if (skipIfNoDatabase(t, db)) return;
     const suffix = `u-${Date.now()}`;
-    const fx = await createPrizeRoundFixture({ uniquePerRound: true, suffix });
+    const fx = await createPrizeRoundFixture({ suffix });
     try {
       const drawn = row0DrawnNumbers(fx.cellsA);
       const credited: string[] = [];

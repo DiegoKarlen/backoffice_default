@@ -186,5 +186,16 @@ export const api = {
     },
     walletTransactionCardDetail: (playerId, transactionId) =>
       apiJson(`/backoffice/players/${playerId}/wallet/transactions/${transactionId}/card-detail`),
+    depositDetail: (playerId, depositId) =>
+      apiJson(`/backoffice/players/${playerId}/deposits/${depositId}`),
+  },
+
+  paymentMethods: {
+    list: () => apiJson("/backoffice/payment-methods"),
+    patch: (id, body) =>
+      apiJson(`/backoffice/payment-methods/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
   },
 };

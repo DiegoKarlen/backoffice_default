@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment methods · Backoffice</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dash26-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+          var loc = localStorage.getItem('bo_locale');
+          if (loc === 'en' || loc === 'es') document.documentElement.lang = loc;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body data-active="admin-payment-methods" data-bo-page="payment-methods">
+    <div class="shell">
+      <div data-shell-sidebar></div>
+      <div class="main">
+        <div data-shell-topbar></div>
+        <main class="content" data-bo-payment-methods-wrap>
+        <div id="bo-payment-methods-msg" class="field-help" style="display:none;margin-bottom:12px;"></div>
+
+        <section class="col-12 card" id="bo-payment-methods-list-view">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <span class="eyebrow" data-i18n="paymentMethodsExtra.breadcrumb"></span>
+              <h2 class="card-title" data-i18n="paymentMethodsExtra.listTitle"></h2>
+            </div>
+          </div>
+          <p class="field-help" data-i18n="paymentMethodsExtra.listHint"></p>
+
+          <div class="table-wrap">
+            <table class="table table--compact">
+              <thead>
+                <tr>
+                  <th data-i18n="paymentMethods.colName"></th>
+                  <th data-i18n="paymentMethods.colProvider"></th>
+                  <th data-i18n="paymentMethods.colExternalId"></th>
+                  <th data-i18n="paymentMethods.colCurrency"></th>
+                  <th data-i18n="paymentMethods.colMin"></th>
+                  <th data-i18n="paymentMethods.colMax"></th>
+                  <th data-i18n="paymentMethods.colActive"></th>
+                </tr>
+              </thead>
+              <tbody id="bo-payment-methods-tbody">
+                <tr><td colspan="7" data-i18n="paymentMethods.loading"></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        </main>
+        <div data-shell-footer></div>
+      </div>
+    </div>
+  </body>
+</html>

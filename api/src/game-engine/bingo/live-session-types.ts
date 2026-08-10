@@ -28,6 +28,7 @@ export type LiveSnapshot = {
     drawMode: BingoDrawMode;
     canMarkLiveBall: boolean;
     prizeMode: string;
+    jackpotMaxBall: number | null;
     prizes: Array<{
       figure: BingoFigure;
       amount: string;
@@ -47,6 +48,8 @@ export type ScheduledDrawingRound = {
     bingoType: BingoType;
     drawMode: BingoDrawMode;
     prizeMode: string;
+    jackpotEnabled: boolean;
+    jackpotMaxBall: number | null;
     prizes: Array<{ figure: BingoFigure; amount: string; displayAmount: string }>;
   };
   ballQueue: number[];

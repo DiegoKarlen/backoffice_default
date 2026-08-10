@@ -9,6 +9,12 @@ import {
   wireBingoPrizeMode,
 } from "./prizes.js";
 import {
+  collectJackpotPayload,
+  fillJackpotFields,
+  resetJackpotFields,
+  wireJackpotFields,
+} from "./jackpot.js";
+import {
   datetimeLocalToIso,
   defaultEndFromStart,
   defaultStartDtLocal,
@@ -63,6 +69,7 @@ function collectPayload(prefix) {
   const prizesHost = document.getElementById(`${prefix}-prizes`);
   const prizes = collectPrizesFromHost(prizesHost, prefix);
   const prizeMode = getPrizeModeForPrefix(prefix);
+  const jackpot = collectJackpotPayload(prefix);
 
   let prizePoolSeed = "0";
   if (prizeMode === "PERCENTAGE") {
@@ -89,6 +96,7 @@ function collectPayload(prefix) {
     prizePayoutMode,
     drawMode,
     prizes,
+    ...jackpot,
   };
 }
 
@@ -118,6 +126,8 @@ function resetCreateForm() {
   const createPool = document.getElementById("create-prizePoolSeed");
   if (createPool) createPool.value = "0";
   wireBingoPrizeMode("create");
+  wireJackpotFields("create");
+  resetJackpotFields("create");
   renderPrizesEditor(document.getElementById("create-prizes"), [], "create");
 }
 
@@ -159,12 +169,15 @@ function fillEditForm(bingo) {
   const editPool = document.getElementById("edit-prizePoolSeed");
   if (editPool) editPool.value = String(bingo.prizePoolSeed ?? "0");
   wireBingoPrizeMode("edit");
+  wireJackpotFields("edit");
+  fillJackpotFields("edit", bingo);
   renderPrizesEditor(
     document.getElementById("edit-prizes"),
-    (bingo.prizes || []).map((p) => ({
+    (bingo.prizes || [])
+      .filter((p) => p.figure !== "JACKPOT")
+      .map((p) => ({
       figure: p.figure,
       amount: p.amount,
-      uniquePerRound: p.uniquePerRound !== false,
     })),
     "edit",
   );

@@ -7,4 +7,4 @@ export type {
   WalletTxDetail as TxDetail,
 } from "@shared/index.ts";
 
-export type PpTab = "buy" | "cards" | "tx";
+export type PpTab = "buy" | "cards" | "tx" | "deposit";

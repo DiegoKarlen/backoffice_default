@@ -14,6 +14,7 @@ const productTitles = {
   'admin-players': 'Backoffice · Players',
   'admin-security': 'Backoffice · Security',
   'admin-rooms': 'Backoffice · Rooms',
+  'admin-payment-methods': 'Backoffice · Payment methods',
 };
 
 /** Demo Adminator (solo si `BO_INCLUDE_ADMINATOR_DEMO=1`). */

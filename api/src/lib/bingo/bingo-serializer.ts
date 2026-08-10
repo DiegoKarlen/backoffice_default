@@ -31,6 +31,9 @@ export function serializeBingo(b: {
   prizeMode: BingoPrizeMode;
   prizePoolSeed: Prisma.Decimal;
   minPlayersToStart: number;
+  jackpotEnabled: boolean;
+  jackpotMaxBall: number | null;
+  jackpotAmount: Prisma.Decimal | null;
   createdAt: Date;
   updatedAt: Date;
   room?: { id: string; name: string; status: RoomStatus };
@@ -39,7 +42,6 @@ export function serializeBingo(b: {
     bingoId: string;
     figure: BingoFigure;
     amount: Prisma.Decimal;
-    uniquePerRound: boolean;
   }[];
 }) {
   return {
@@ -58,6 +60,9 @@ export function serializeBingo(b: {
     prizeMode: b.prizeMode,
     prizePoolSeed: b.prizePoolSeed.toString(),
     minPlayersToStart: b.minPlayersToStart,
+    jackpotEnabled: b.jackpotEnabled,
+    jackpotMaxBall: b.jackpotMaxBall,
+    jackpotAmount: b.jackpotAmount?.toString() ?? null,
     createdAt: b.createdAt,
     updatedAt: b.updatedAt,
     prizes: b.prizes
@@ -66,7 +71,6 @@ export function serializeBingo(b: {
           bingoId: p.bingoId,
           figure: p.figure,
           amount: p.amount.toString(),
-          uniquePerRound: p.uniquePerRound,
         }))
       : undefined,
   };

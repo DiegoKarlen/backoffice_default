@@ -186,6 +186,27 @@
                     </label>
                   </div>
                 </div>
+                <div class="field bo-form-profile__full">
+                  <span class="field-label" data-i18n="bingo.labelJackpot"></span>
+                  <div class="field-group bo-radio-stack">
+                    <label class="check">
+                      <input type="checkbox" id="create-jackpotEnabled" />
+                      <span class="box"></span>
+                      <span data-i18n="bingo.jackpotEnable"></span>
+                    </label>
+                  </div>
+                  <div id="create-jackpot-fields" class="bo-bingo-jackpot__fields">
+                    <div class="field field--underline">
+                      <label class="field-label" for="create-jackpotMaxBall" data-i18n="bingo.labelJackpotMaxBall"></label>
+                      <input id="create-jackpotMaxBall" class="input input--underline" type="number" min="2" max="75" step="1" disabled autocomplete="off" />
+                      <p class="field-help" data-i18n="bingo.hintJackpotMaxBall"></p>
+                    </div>
+                    <div class="field field--underline">
+                      <label class="field-label" for="create-jackpotAmount" data-i18n="bingo.labelJackpotAmount"></label>
+                      <input id="create-jackpotAmount" class="input input--underline" type="text" inputmode="decimal" disabled autocomplete="off" />
+                    </div>
+                  </div>
+                </div>
               </div>
             </article>
             </div>
@@ -316,6 +337,27 @@
                       <span class="box"></span>
                       <span data-i18n="bingo.prizePayoutDeferred"></span>
                     </label>
+                  </div>
+                </div>
+                <div class="field bo-form-profile__full">
+                  <span class="field-label" data-i18n="bingo.labelJackpot"></span>
+                  <div class="field-group bo-radio-stack">
+                    <label class="check">
+                      <input type="checkbox" id="edit-jackpotEnabled" />
+                      <span class="box"></span>
+                      <span data-i18n="bingo.jackpotEnable"></span>
+                    </label>
+                  </div>
+                  <div id="edit-jackpot-fields" class="bo-bingo-jackpot__fields">
+                    <div class="field field--underline">
+                      <label class="field-label" for="edit-jackpotMaxBall" data-i18n="bingo.labelJackpotMaxBall"></label>
+                      <input id="edit-jackpotMaxBall" class="input input--underline" type="number" min="2" max="75" step="1" disabled autocomplete="off" />
+                      <p class="field-help" data-i18n="bingo.hintJackpotMaxBall"></p>
+                    </div>
+                    <div class="field field--underline">
+                      <label class="field-label" for="edit-jackpotAmount" data-i18n="bingo.labelJackpotAmount"></label>
+                      <input id="edit-jackpotAmount" class="input input--underline" type="text" inputmode="decimal" disabled autocomplete="off" />
+                    </div>
                   </div>
                 </div>
               </div>
