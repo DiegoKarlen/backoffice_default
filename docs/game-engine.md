@@ -104,8 +104,9 @@ Implementación: `bingo/bingo-75/prize-evaluator.ts` + `prize-winner-order.ts`.
 | Regla | Comportamiento |
 |-------|----------------|
 | Orden de figuras | LINE → PERIMETER → FULL_HOUSE (`BINGO_FIGURE_EVAL_ORDER`) |
-| Liquidación en wallet | **Siempre al cerrar la partida** (`settleDeferredSplitPrizesForRound` al pasar a `COMPLETED`). Durante el sorteo solo se registran ganadores en `DeferredRoundPrizeWin`; SSE `prize_awarded` lleva `deferredSettlement` y **sin** `amountCents`. |
-| `prizePayoutMode` (BO / `Bingo`) | Define **cómo** se reparte al cierre (no el momento): `IMMEDIATE_FULL_PER_WINNER` (default) = cada ganador cobra el **monto completo** del premio; `DEFERRED_SPLIT_AT_ROUND_END` = el monto configurado por figura se **divide** entre todos los ganadores de esa figura en la **misma bolilla**. |
+| Liquidación en wallet | Según `prizeSettlementTiming`: **inmediato** al salir la figura (`ON_FIGURE`) o **al cerrar la partida** (`AT_ROUND_END`, default). |
+| `prizePayoutMode` (BO / `Bingo`) | Define **cómo** se reparte: `IMMEDIATE_FULL_PER_WINNER` = monto completo por ganador; `DEFERRED_SPLIT_AT_ROUND_END` = monto dividido entre ganadores de la **misma bolilla**. |
+| `prizeSettlementTiming` (BO / `Bingo`) | Define **cuándo** se acredita: `ON_FIGURE` = al detectar la figura; `AT_ROUND_END` = al cerrar la partida. Con pago inmediato, SSE `prize_awarded` incluye `amountCents`. |
 | Figura por partida | Cada figura se paga **una sola vez** por partida (primera bolilla en que alguien la cumple). Varios cartones en **esa misma bolilla** entran al reparto; quien la cumple en bolas posteriores **no** cobra. |
 | Desempate en reparto | Al dividir centavos del pozo (`DEFERRED_SPLIT_AT_ROUND_END`), orden `createdAt` → `cardIndex` → `id` para repartir el resto (+1 céntimo) |
 | Mismo cartón | Puede ganar varias figuras distintas a lo largo del sorteo |

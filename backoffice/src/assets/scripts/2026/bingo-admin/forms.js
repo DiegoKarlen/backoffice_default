@@ -58,6 +58,11 @@ function collectPayload(prefix) {
   const defRadio = /** @type {HTMLInputElement | null} */ (document.getElementById(`${prefix}-prizePayoutMode-deferred`));
   const prizePayoutMode = defRadio?.checked ? "DEFERRED_SPLIT_AT_ROUND_END" : "IMMEDIATE_FULL_PER_WINNER";
 
+  const onFigureRadio = /** @type {HTMLInputElement | null} */ (
+    document.getElementById(`${prefix}-prizeSettlementTiming-onFigure`)
+  );
+  const prizeSettlementTiming = onFigureRadio?.checked ? "ON_FIGURE" : "AT_ROUND_END";
+
   const liveDrawRadio = /** @type {HTMLInputElement | null} */ (document.getElementById(`${prefix}-drawMode-live`));
   const drawMode = liveDrawRadio?.checked ? "LIVE" : "VIRTUAL";
 
@@ -94,6 +99,7 @@ function collectPayload(prefix) {
     prizePoolSeed,
     minPlayersToStart,
     prizePayoutMode,
+    prizeSettlementTiming,
     drawMode,
     prizes,
     ...jackpot,
@@ -116,6 +122,10 @@ function resetCreateForm() {
   const createDefOff = /** @type {HTMLInputElement | null} */ (document.getElementById("create-prizePayoutMode-deferred"));
   if (createDef) createDef.checked = true;
   if (createDefOff) createDefOff.checked = false;
+  const createOnFigure = /** @type {HTMLInputElement | null} */ (document.getElementById("create-prizeSettlementTiming-onFigure"));
+  const createAtEnd = /** @type {HTMLInputElement | null} */ (document.getElementById("create-prizeSettlementTiming-atRoundEnd"));
+  if (createOnFigure) createOnFigure.checked = false;
+  if (createAtEnd) createAtEnd.checked = true;
   const createVirt = /** @type {HTMLInputElement | null} */ (document.getElementById("create-drawMode-virtual"));
   const createLive = /** @type {HTMLInputElement | null} */ (document.getElementById("create-drawMode-live"));
   if (createVirt) createVirt.checked = true;
@@ -154,6 +164,13 @@ function fillEditForm(bingo) {
   if (imm && def) {
     imm.checked = ppm === "IMMEDIATE_FULL_PER_WINNER";
     def.checked = ppm === "DEFERRED_SPLIT_AT_ROUND_END";
+  }
+  const pst = bingo.prizeSettlementTiming === "ON_FIGURE" ? "ON_FIGURE" : "AT_ROUND_END";
+  const onFig = /** @type {HTMLInputElement | null} */ (document.getElementById("edit-prizeSettlementTiming-onFigure"));
+  const atEnd = /** @type {HTMLInputElement | null} */ (document.getElementById("edit-prizeSettlementTiming-atRoundEnd"));
+  if (onFig && atEnd) {
+    onFig.checked = pst === "ON_FIGURE";
+    atEnd.checked = pst === "AT_ROUND_END";
   }
   const dm = bingo.drawMode === "LIVE" ? "LIVE" : "VIRTUAL";
   const editVirt = /** @type {HTMLInputElement | null} */ (document.getElementById("edit-drawMode-virtual"));

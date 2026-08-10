@@ -4,6 +4,7 @@ import {
   BingoStatus,
   BingoType,
   PrizePayoutMode,
+  PrizeSettlementTiming,
   type Prisma,
 } from "@prisma/client";
 import { rescheduleLiveSessionForRoom } from "../../game-engine/bingo/live-session.js";
@@ -76,6 +77,7 @@ export async function createBingo(body: CreateBody, userId?: string) {
         prizeMode === BingoPrizeMode.PERCENTAGE ? toDecimalString(body.prizePoolSeed ?? 0) : "0",
       minPlayersToStart: body.minPlayersToStart,
       prizePayoutMode: body.prizePayoutMode ?? PrizePayoutMode.IMMEDIATE_FULL_PER_WINNER,
+      prizeSettlementTiming: body.prizeSettlementTiming ?? PrizeSettlementTiming.AT_ROUND_END,
       drawMode: body.drawMode ?? BingoDrawMode.VIRTUAL,
       ...jackpotFields,
       createdByUserId: userId ?? null,
@@ -142,6 +144,7 @@ export async function updateBingo(id: string, body: UpdateBody, userId?: string)
               : undefined,
         minPlayersToStart: body.minPlayersToStart,
         prizePayoutMode: body.prizePayoutMode,
+        prizeSettlementTiming: body.prizeSettlementTiming,
         drawMode: body.drawMode,
         ...(jackpotFields ?? {}),
         updatedByUserId: userId ?? null,

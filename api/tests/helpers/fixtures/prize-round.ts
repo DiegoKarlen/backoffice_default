@@ -54,6 +54,7 @@ export async function cleanupPrizeRoundFixture(ids: PrizeRoundFixtureIds): Promi
 export async function createPrizeRoundFixture(params: {
   suffix: string;
   prizePayoutMode?: "IMMEDIATE_FULL_PER_WINNER" | "DEFERRED_SPLIT_AT_ROUND_END";
+  prizeSettlementTiming?: "ON_FIGURE" | "AT_ROUND_END";
 }): Promise<PrizeRoundFixture> {
   const [cellsA, cellsB] = twoDistinctCardsSameRow0();
   const fpA = fpCells(cellsA);
@@ -84,6 +85,7 @@ export async function createPrizeRoundFixture(params: {
       cardPrice: new Prisma.Decimal("1.0000"),
       minPlayersToStart: 1,
       prizePayoutMode: params.prizePayoutMode ?? "IMMEDIATE_FULL_PER_WINNER",
+      prizeSettlementTiming: params.prizeSettlementTiming ?? "AT_ROUND_END",
       prizes: {
         create: [
           {

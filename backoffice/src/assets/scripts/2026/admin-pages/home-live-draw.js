@@ -115,9 +115,10 @@ async function refreshHomeLiveDraw(roomSlug) {
   if (!slug) {
     const pickerWrapEmpty = document.getElementById("bo-home-live-picker-wrap");
     const metaEmpty = document.getElementById("bo-home-live-meta");
+    const statusEl = document.getElementById("bo-home-live-status");
     if (pickerWrapEmpty) pickerWrapEmpty.hidden = true;
     if (metaEmpty) metaEmpty.hidden = true;
-    statusEl.textContent = t("home.liveDrawSelectRoom");
+    if (statusEl) statusEl.textContent = t("home.liveDrawSelectRoom");
     return;
   }
   try {

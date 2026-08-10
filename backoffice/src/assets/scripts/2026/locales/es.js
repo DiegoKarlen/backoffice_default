@@ -488,11 +488,16 @@ export default {
       "Virtual: el sistema sortea las bolas automáticamente. En vivo: la transmisión en video define el sorteo; el operador marca cada bola en el display.",
     drawModeVirtual: "Virtual",
     drawModeLive: "En vivo",
-    labelPrizePayoutMode: "Liquidación de premios",
+    labelPrizePayoutMode: "Reparto del premio",
     helpPrizePayoutMode:
-      "La billetera siempre se acredita al finalizar la partida. Monto completo: cada ganador cobra el importe configurado de la figura. Reparto al cierre: ese importe se divide en partes iguales entre todos los ganadores de la figura en la partida (el aviso en vivo muestra el premio sin importe hasta el cierre).",
+      "Monto completo: cada ganador cobra el importe configurado de la figura. Monto dividido: ese importe se reparte en partes iguales entre los ganadores de la misma bolilla.",
     prizePayoutImmediate: "Monto completo",
     prizePayoutDeferred: "Monto dividido",
+    labelPrizeSettlementTiming: "Momento del pago",
+    helpPrizeSettlementTiming:
+      "Inmediato: la billetera se acredita al salir la figura. Al finalizar: se acredita al cerrar la partida (comportamiento actual por defecto).",
+    prizeSettlementOnFigure: "Inmediato (al salir la figura)",
+    prizeSettlementAtRoundEnd: "Al finalizar la partida",
     prizeMode: "Tipo de premios",
     labelPrizePoolSeed: "Pozo inicial (por partida)",
     labelJackpot: "Jackpot",

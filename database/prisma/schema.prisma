@@ -80,12 +80,20 @@ enum BingoStatus {
   INACTIVE
 }
 
-/** Cómo se pagan los montos configurados por premio en bingo en vivo (75). */
+/** Cómo se reparte el monto configurado por premio entre ganadores de la misma figura. */
 enum PrizePayoutMode {
-  /// Cada ganador cobra el monto completo al momento de ganar (comportamiento clásico).
+  /// Cada ganador cobra el monto completo del premio.
   IMMEDIATE_FULL_PER_WINNER
-  /// El monto del premio se reparte en partes iguales entre todos los ganadores de esa figura en la partida; acreditación al cerrar la ronda.
+  /// El monto del premio se divide en partes iguales entre los ganadores de esa figura en la misma bolilla.
   DEFERRED_SPLIT_AT_ROUND_END
+}
+
+/** Cuándo se acredita la billetera del jugador tras ganar una figura. */
+enum PrizeSettlementTiming {
+  /// Al detectar la figura (misma bolilla ganadora).
+  ON_FIGURE
+  /// Al cerrar la partida (comportamiento por defecto).
+  AT_ROUND_END
 }
 
 /// Virtual = bolas por motor/RNG; Live = operador marca bolas en display (video).
@@ -151,8 +159,9 @@ model Bingo {
   /// Pozo inicial por partida cuando `prizeMode` = PERCENTAGE (+ ventas de cartones).
   prizePoolSeed      Decimal      @default(0) @db.Decimal(14, 4)
   minPlayersToStart  Int          @default(2)
-  prizePayoutMode    PrizePayoutMode @default(IMMEDIATE_FULL_PER_WINNER)
-  drawMode           BingoDrawMode @default(VIRTUAL)
+  prizePayoutMode       PrizePayoutMode       @default(IMMEDIATE_FULL_PER_WINNER)
+  prizeSettlementTiming PrizeSettlementTiming @default(AT_ROUND_END)
+  drawMode              BingoDrawMode         @default(VIRTUAL)
   /// Si true, cartón lleno antes de `jackpotMaxBall` gana el premio JACKPOT (monto fijo).
   jackpotEnabled     Boolean       @default(false)
   jackpotMaxBall     Int?

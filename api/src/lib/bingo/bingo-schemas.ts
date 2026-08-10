@@ -6,6 +6,7 @@ import {
   BingoStatus,
   BingoType,
   PrizePayoutMode,
+  PrizeSettlementTiming,
 } from "@prisma/client";
 
 export const prizeSchema = z.object({
@@ -26,6 +27,7 @@ export const baseBingoBodySchema = z.object({
   prizePoolSeed: z.union([z.string(), z.number()]).optional(),
   minPlayersToStart: z.number().int().min(1).max(100_000).default(2),
   prizePayoutMode: z.nativeEnum(PrizePayoutMode).optional(),
+  prizeSettlementTiming: z.nativeEnum(PrizeSettlementTiming).optional(),
   drawMode: z.nativeEnum(BingoDrawMode).optional(),
   jackpotEnabled: z.boolean().optional().default(false),
   jackpotMaxBall: z.number().int().min(2).max(90).optional().nullable(),

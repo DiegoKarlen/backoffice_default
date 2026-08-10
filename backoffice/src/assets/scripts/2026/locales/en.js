@@ -488,11 +488,16 @@ export default {
       "Virtual: the system draws balls automatically. Live: the video broadcast is the draw; the operator marks each ball on the display.",
     drawModeVirtual: "Virtual",
     drawModeLive: "Live",
-    labelPrizePayoutMode: "Prize payout",
+    labelPrizePayoutMode: "Prize split",
     helpPrizePayoutMode:
-      "Wallets are always credited when the round ends. Full amount: each winner gets the full configured figure amount. Deferred split: that amount is split evenly among all winners of the figure in the round (live toast shows the win without the amount until settlement).",
+      "Full amount: each winner receives the configured prize. Divided amount: that prize is split equally among winners on the same ball.",
     prizePayoutImmediate: "Full amount",
     prizePayoutDeferred: "Divided amount",
+    labelPrizeSettlementTiming: "Payout timing",
+    helpPrizeSettlementTiming:
+      "Immediate: wallet is credited when the figure is won. At round end: wallet is credited when the round closes (default).",
+    prizeSettlementOnFigure: "Immediate (on figure)",
+    prizeSettlementAtRoundEnd: "At round end",
     prizeMode: "Prize type",
     labelPrizePoolSeed: "Initial pool (per round)",
     labelJackpot: "Jackpot",
