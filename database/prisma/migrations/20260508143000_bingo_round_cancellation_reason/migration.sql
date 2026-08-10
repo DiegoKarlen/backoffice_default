@@ -1,2 +1,2 @@
--- AlterTable
-ALTER TABLE "BingoRound" ADD COLUMN "cancellationReason" TEXT;
+-- Legacy ordering: this migration originally ran before BingoRound existed.
+-- Column is created in 20260510120000_bingo_rounds; kept as no-op for history.

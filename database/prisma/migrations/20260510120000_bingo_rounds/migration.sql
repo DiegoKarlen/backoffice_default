@@ -8,6 +8,7 @@ CREATE TABLE "BingoRound" (
     "sequence" INTEGER NOT NULL,
     "startsAt" TIMESTAMP(3) NOT NULL,
     "status" "BingoRoundStatus" NOT NULL DEFAULT 'SCHEDULED',
+    "cancellationReason" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
