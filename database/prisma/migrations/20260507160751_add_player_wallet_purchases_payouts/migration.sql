@@ -189,13 +189,7 @@ ALTER TABLE "Deposit" ADD CONSTRAINT "Deposit_playerId_fkey" FOREIGN KEY ("playe
 ALTER TABLE "CartonPurchase" ADD CONSTRAINT "CartonPurchase_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "CartonPurchase" ADD CONSTRAINT "CartonPurchase_bingoRoundId_fkey" FOREIGN KEY ("bingoRoundId") REFERENCES "BingoRound"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "PlayerRoundCard" ADD CONSTRAINT "PlayerRoundCard_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PlayerRoundCard" ADD CONSTRAINT "PlayerRoundCard_bingoRoundId_fkey" FOREIGN KEY ("bingoRoundId") REFERENCES "BingoRound"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "PlayerRoundCard" ADD CONSTRAINT "PlayerRoundCard_cartonPurchaseId_fkey" FOREIGN KEY ("cartonPurchaseId") REFERENCES "CartonPurchase"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
