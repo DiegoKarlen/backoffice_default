@@ -1,13 +1,12 @@
-import { BingoPrizeMode, Prisma } from "@prisma/client";
+import { BingoFigure, BingoPrizeMode, Prisma } from "@prisma/client";
 import { toDecimalString } from "./bingo-serializer.js";
 import type { PrizeBody } from "./bingo-schemas.js";
 
 export type { PrizeBody };
 
-export function prizeRowDbData(p: PrizeBody): { amount: string; uniquePerRound: boolean } {
+export function prizeRowDbData(p: PrizeBody): { amount: string } {
   return {
     amount: toDecimalString(p.amount),
-    uniquePerRound: p.uniquePerRound ?? true,
   };
 }
 
@@ -22,6 +21,13 @@ export function validatePrizes(
     const key = String(p.figure);
     if (seen.has(key)) return `Duplicate prize figure: ${key}`;
     seen.add(key);
+    if (p.figure === BingoFigure.JACKPOT) {
+      const n = Number(toDecimalString(p.amount));
+      if (!Number.isFinite(n) || n <= 0) {
+        return "Jackpot amount must be a positive number";
+      }
+      continue;
+    }
     const n = Number(toDecimalString(p.amount));
     if (!Number.isFinite(n) || n <= 0) {
       return prizeMode === BingoPrizeMode.PERCENTAGE
@@ -85,7 +91,7 @@ export async function syncBingoPrizesInUpdateTx(
       const hasPaidPayouts = existing._count.payouts > 0;
       if (hasPaidPayouts && prizeAmountDiffers(existing, row.amount)) {
         const err = new Error(
-          `Cannot change the prize amount for figure ${p.figure}: there are already recorded prize payouts (credited amounts) for this prize. Those credits are immutable; you can still update "unique per round" or leave the amount unchanged.`,
+          `Cannot change the prize amount for figure ${p.figure}: there are already recorded prize payouts (credited amounts) for this prize. Those credits are immutable; leave the amount unchanged.`,
         );
         err.name = "PrizeAmountLocked";
         throw err;

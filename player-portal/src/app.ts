@@ -13,7 +13,24 @@ import {
 } from "./lib/session.js";
 import { mountGuestAuth } from "./views/auth.js";
 import { mountDashboard } from "./views/dashboard.js";
+import { handleDepositReturnQuery } from "./payments/index.js";
 import { renderLoggedShell } from "./views/shell.js";
+
+function consumeDepositReturnFromUrl(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const result = handleDepositReturnQuery(params);
+  if (!result) return null;
+
+  if (params.has("deposit") || params.has("depositId")) {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("deposit");
+    u.searchParams.delete("depositId");
+    const qs = u.searchParams.toString();
+    history.replaceState(null, "", u.pathname + (qs ? `?${qs}` : "") + u.hash);
+  }
+
+  return result.depositId;
+}
 
 export function renderApp(): void {
   const root = document.getElementById("app");
@@ -47,7 +64,8 @@ export function renderApp(): void {
 
   void (async () => {
     try {
-      await mountDashboard(root, msg, () => renderApp());
+      const depositReturnId = consumeDepositReturnFromUrl();
+      await mountDashboard(root, msg, () => renderApp(), { depositReturnId });
     } catch (err) {
       if (isSessionHandledError(err)) return;
       if (msg) msg.textContent = friendlyError(err);

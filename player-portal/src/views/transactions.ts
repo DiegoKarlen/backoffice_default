@@ -4,38 +4,76 @@ import type { TxDetail } from "../types.js";
 
 const formatMoney = formatMoneyFromCents;
 
+function renderDepositIds(detail: TxDetail): string {
+  const parts: string[] = [];
+  if (detail.depositId) {
+    parts.push(`<span>Ref. interna: <span class="mono">${escapeHtml(detail.depositId)}</span></span>`);
+  }
+  if (detail.depositExternalRef) {
+    parts.push(
+      `<span>Ref. gateway: <span class="mono">${escapeHtml(detail.depositExternalRef)}</span></span>`,
+    );
+  }
+  if (!parts.length) return "";
+  return `<div class="pp-tx-table__meta">${parts.join('<span class="pp-tx-table__meta-sep"> · </span>')}</div>`;
+}
+
 export function renderTxList(transactions: Array<Record<string, unknown>>, currency: string): string {
   if (!transactions.length) {
     return `<p class="pp-muted">Sin movimientos recientes.</p>`;
   }
-  return `<ul class="pp-tx-list">${transactions
-    .map((t) => {
-      const amt = Number(t.amountCents ?? 0);
-      const when = t.createdAt ? formatWhen(String(t.createdAt)) : "";
-      const sign = amt >= 0 ? "+" : "";
-      const detail = t.detail as TxDetail | undefined;
-      let labelHtml: string;
-      if (detail?.kind === "prize" && detail.bingoName && detail.figure) {
-        labelHtml = `Premio · ${escapeHtml(detail.bingoName)} · ${escapeHtml(detail.figure)}`;
-      } else if (detail?.kind === "purchase" && detail.bingoName) {
-        labelHtml = `Compra cartones · ${escapeHtml(detail.bingoName)}${
-          detail.roundSequence != null ? ` · Partida #${detail.roundSequence}` : ""
-        }`;
-      } else if (detail?.kind === "refund" && detail.bingoName) {
-        labelHtml = `Reembolso · partida cancelada · ${escapeHtml(detail.bingoName)}${
-          detail.roundSequence != null ? ` · Partida #${detail.roundSequence}` : ""
-        }`;
-      } else if (detail?.kind === "deposit") {
-        labelHtml = "Ingreso / depósito";
-      } else if (detail?.kind === "adjustment") {
-        labelHtml = "Ajuste de saldo";
-      } else {
-        labelHtml = escapeHtml(String(t.type ?? ""));
-      }
-      const money = formatMoney(Math.abs(amt), currency);
-      return `<li><span>${labelHtml} <span class="pp-muted">· ${escapeHtml(when)}</span></span><span><strong>${sign}${escapeHtml(money)}</strong></span></li>`;
-    })
-    .join("")}</ul>`;
+  return `<table class="pp-tx-table">
+    <thead>
+      <tr>
+        <th scope="col">Movimiento</th>
+        <th scope="col" class="pp-tx-table__num">Importe</th>
+        <th scope="col" class="pp-tx-table__num">Saldo</th>
+      </tr>
+    </thead>
+    <tbody>${transactions
+      .map((t) => {
+        const amt = Number(t.amountCents ?? 0);
+        const balanceAfter = t.balanceAfterCents;
+        const when = t.createdAt ? formatWhen(String(t.createdAt)) : "";
+        const sign = amt >= 0 ? "+" : "−";
+        const detail = t.detail as TxDetail | undefined;
+        let labelHtml: string;
+        let metaHtml = "";
+        if (detail?.kind === "prize" && detail.bingoName && detail.figure) {
+          labelHtml = `Premio · ${escapeHtml(detail.bingoName)} · ${escapeHtml(detail.figure)}`;
+        } else if (detail?.kind === "purchase" && detail.bingoName) {
+          labelHtml = `Compra cartones · ${escapeHtml(detail.bingoName)}${
+            detail.roundSequence != null ? ` · Partida #${detail.roundSequence}` : ""
+          }`;
+        } else if (detail?.kind === "refund" && detail.bingoName) {
+          labelHtml = `Reembolso · partida cancelada · ${escapeHtml(detail.bingoName)}${
+            detail.roundSequence != null ? ` · Partida #${detail.roundSequence}` : ""
+          }`;
+        } else if (detail?.kind === "deposit") {
+          labelHtml = "Ingreso / depósito";
+          metaHtml = renderDepositIds(detail);
+        } else if (detail?.kind === "adjustment") {
+          labelHtml = "Ajuste de saldo";
+        } else {
+          labelHtml = escapeHtml(String(t.type ?? ""));
+        }
+        const money = formatMoney(Math.abs(amt), currency);
+        const balanceLabel =
+          balanceAfter != null && Number.isFinite(Number(balanceAfter))
+            ? formatMoney(Number(balanceAfter), currency)
+            : "—";
+        const amtClass = amt >= 0 ? "pp-tx-table__amt--in" : "pp-tx-table__amt--out";
+        return `<tr>
+          <td class="pp-tx-table__desc">
+            <div>${labelHtml} <span class="pp-muted">· ${escapeHtml(when)}</span></div>
+            ${metaHtml}
+          </td>
+          <td class="pp-tx-table__num pp-tx-table__amt ${amtClass}"><strong>${sign}${escapeHtml(money)}</strong></td>
+          <td class="pp-tx-table__num pp-tx-table__bal">${escapeHtml(balanceLabel)}</td>
+        </tr>`;
+      })
+      .join("")}</tbody>
+  </table>`;
 }
 
 export function repopulateTxBingoRound(

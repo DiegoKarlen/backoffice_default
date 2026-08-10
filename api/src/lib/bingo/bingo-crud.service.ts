@@ -11,6 +11,12 @@ import { syncScheduledRoundsForBingo } from "../bingo-rounds-sync.js";
 import { invalidateUpcomingCache } from "../bingo-upcoming.js";
 import { prisma } from "../prisma.js";
 import { prizeRowDbData, syncBingoPrizesInUpdateTx, validatePrizes } from "./bingo-prize-sync.js";
+import {
+  jackpotDbFields,
+  mergeJackpotPrize,
+  stripJackpotPrizeFromList,
+  validateJackpotConfig,
+} from "./bingo-jackpot.js";
 import { createBingoSchema, updateBingoSchema } from "./bingo-schemas.js";
 import { serializeBingo, toDecimalString } from "./bingo-serializer.js";
 import { validateBingo, validateScheduleBounds } from "./bingo-validation.js";
@@ -49,6 +55,11 @@ export async function createBingo(body: CreateBody, userId?: string) {
   const prizeMode = body.prizeMode ?? BingoPrizeMode.FIXED;
   const startDt = new Date(body.startDateTime);
   const endDt = new Date(body.endDateTime);
+  const jackpotFields = jackpotDbFields(body);
+  const prizes = mergeJackpotPrize(body.prizes, {
+    enabled: jackpotFields.jackpotEnabled,
+    amount: jackpotFields.jackpotAmount,
+  });
 
   const created = await prisma.bingo.create({
     data: {
@@ -66,10 +77,11 @@ export async function createBingo(body: CreateBody, userId?: string) {
       minPlayersToStart: body.minPlayersToStart,
       prizePayoutMode: body.prizePayoutMode ?? PrizePayoutMode.IMMEDIATE_FULL_PER_WINNER,
       drawMode: body.drawMode ?? BingoDrawMode.VIRTUAL,
+      ...jackpotFields,
       createdByUserId: userId ?? null,
       updatedByUserId: userId ?? null,
       prizes: {
-        create: body.prizes.map((p) => ({
+        create: prizes.map((p) => ({
           figure: p.figure,
           ...prizeRowDbData(p),
         })),
@@ -93,6 +105,17 @@ export async function updateBingo(id: string, body: UpdateBody, userId?: string)
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    const jackpotFields =
+      body.jackpotEnabled !== undefined ||
+      body.jackpotMaxBall !== undefined ||
+      body.jackpotAmount !== undefined
+        ? jackpotDbFields({
+            jackpotEnabled: body.jackpotEnabled ?? existing.jackpotEnabled,
+            jackpotMaxBall: body.jackpotMaxBall ?? existing.jackpotMaxBall,
+            jackpotAmount: body.jackpotAmount ?? existing.jackpotAmount,
+          })
+        : null;
+
     const u = await tx.bingo.update({
       where: { id },
       data: {
@@ -120,12 +143,37 @@ export async function updateBingo(id: string, body: UpdateBody, userId?: string)
         minPlayersToStart: body.minPlayersToStart,
         prizePayoutMode: body.prizePayoutMode,
         drawMode: body.drawMode,
+        ...(jackpotFields ?? {}),
         updatedByUserId: userId ?? null,
       },
     });
 
-    if (body.prizes !== undefined) {
-      await syncBingoPrizesInUpdateTx(tx, id, body.prizes);
+    if (body.prizes !== undefined || jackpotFields) {
+      const jackpotEnabled = jackpotFields?.jackpotEnabled ?? existing.jackpotEnabled;
+      const jackpotAmount =
+        jackpotFields?.jackpotAmount ?? existing.jackpotAmount?.toString() ?? null;
+
+      let manualPrizes: CreateBody["prizes"];
+      if (body.prizes !== undefined) {
+        manualPrizes = stripJackpotPrizeFromList(body.prizes);
+      } else {
+        const currentPrizes = await tx.bingoPrize.findMany({ where: { bingoId: id } });
+        manualPrizes = currentPrizes
+          .filter((p) => p.figure !== "JACKPOT")
+          .map((p) => ({
+            figure: p.figure,
+            amount: p.amount.toString(),
+          }));
+      }
+
+      await syncBingoPrizesInUpdateTx(
+        tx,
+        id,
+        mergeJackpotPrize(manualPrizes, {
+          enabled: jackpotEnabled,
+          amount: jackpotAmount,
+        }),
+      );
     }
 
     return tx.bingo.findFirstOrThrow({

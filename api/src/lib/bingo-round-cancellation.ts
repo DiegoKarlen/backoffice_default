@@ -1,5 +1,8 @@
 /** Códigos persistidos en `BingoRound.cancellationReason` cuando la partida queda cancelada. */
 export const BingoRoundCancelReason = {
+  /** No se alcanzó `minPlayersToStart` (jugadores distintos con al menos un cartón). */
+  MIN_PLAYERS_NOT_MET: "MIN_PLAYERS_NOT_MET",
+  /** @deprecated Usar MIN_PLAYERS_NOT_MET; conservado para partidas canceladas antes del fix. */
   MIN_CARTONS_NOT_MET: "MIN_CARTONS_NOT_MET",
   /** Otra partida de la misma sala ya está en `DRAWING` a la hora de `startsAt`. */
   ROOM_DRAW_IN_PROGRESS: "ROOM_DRAW_IN_PROGRESS",

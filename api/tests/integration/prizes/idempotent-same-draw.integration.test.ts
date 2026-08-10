@@ -20,7 +20,7 @@ describe("[integration][prizes] idempotent evaluation on repeated draw", () => {
   it("second evaluateRoundPrizesAfterBall does not duplicate deferred rows", async (t) => {
     if (skipIfNoDatabase(t, db)) return;
     const suffix = `idem-${Date.now()}`;
-    const fx = await createPrizeRoundFixture({ uniquePerRound: false, suffix });
+    const fx = await createPrizeRoundFixture({ suffix });
     try {
       const drawn = row0DrawnNumbers(fx.cellsA);
       const params = {

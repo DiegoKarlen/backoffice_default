@@ -752,9 +752,61 @@ body {
 .bd-rail--der {
   position: absolute;
   top: 148px;
+  bottom: calc(20px + var(--bd-historial-reserve, 188px));
   right: 36px;
   width: 400px;
   z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.bd-rail-der__ball-wrap {
+  display: none;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 0 8px;
+}
+
+#bd-root[data-draw-mode="LIVE"] .bd-rail-der__ball-wrap {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.bd-rail-der__upcoming {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#bd-root[data-draw-mode="LIVE"] .bd-rail--der {
+  bottom: calc(20px + var(--bd-historial-reserve, 188px) + var(--bd-live-gap, 14px));
+}
+
+#bd-root[data-draw-mode="LIVE"] .bd-rail-der__upcoming {
+  flex: 0 0 auto;
+}
+
+#bd-root[data-draw-mode="LIVE"] .bd-rail-der__upcoming #bd-upcoming-body {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.bd-rail-der__upcoming .bd-rail-title {
+  flex-shrink: 0;
+}
+
+.bd-rail-der__upcoming #bd-upcoming-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .bd-rail-title {
@@ -795,6 +847,17 @@ body {
   text-shadow:
     0 0 24px rgba(255, 215, 0, 0.45),
     0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.bd-prize--jackpot .bd-prize__lbl {
+  color: #fff4b8;
+}
+
+.bd-prize--jackpot .bd-prize__val {
+  color: #fff;
+  text-shadow:
+    0 0 28px rgba(255, 200, 50, 0.65),
+    0 2px 14px rgba(0, 0, 0, 0.45);
 }
 
 .bd-muted {
@@ -1495,21 +1558,18 @@ body {
 /* Reserva inferior: panel ÚLTIMAS BOLAS (no solapar con grilla Live) */
 .bd-canvas.sd--live {
   --bd-historial-reserve: 188px;
+  /* Aire entre transmisión en vivo y el panel ÚLTIMAS BOLAS (intermedio) */
+  --bd-live-gap: 14px;
 }
 
-/* Columna central Live: video arriba; marcar bola ocupa el resto hasta el historial */
-/* Solo transmisión; el marcado de bolas es en backoffice. */
+/* Columna central Live: transmisión con margen inferior antes de ÚLTIMAS BOLAS */
 .bd-live-stage {
   position: absolute;
   top: 148px;
-  bottom: calc(20px + var(--bd-historial-reserve, 188px));
+  bottom: calc(20px + var(--bd-historial-reserve, 188px) + var(--bd-live-gap, 14px));
   left: calc(36px + 340px + 16px);
   right: calc(36px + 400px + 16px);
   z-index: 8;
-  display: grid;
-  /* Video más bajo; fila de la bola con más aire hasta ÚLTIMAS BOLAS */
-  grid-template-rows: minmax(0, 0.68fr) minmax(168px, 1fr);
-  gap: 14px;
   min-height: 0;
   pointer-events: auto;
 }
@@ -1518,20 +1578,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 168px;
-  padding: 10px 0 16px;
   pointer-events: none;
 }
 
 .bd-live-ball-hero .bd-live-bola-actual {
-  --bd-cball-size: clamp(140px, 17vh, 220px);
-  min-width: 140px;
-  min-height: 140px;
+  --bd-cball-size: clamp(163px, 18.7vh, 240px);
+  min-width: 163px;
+  min-height: 163px;
 }
 
 .bd-live-video {
-  min-height: 0;
+  width: 100%;
   height: 100%;
+  min-height: 0;
   background: #000;
   border-radius: 12px;
   border: 2px solid rgba(255, 215, 120, 0.38);

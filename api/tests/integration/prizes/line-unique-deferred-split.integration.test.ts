@@ -7,7 +7,7 @@ import { disconnectDatabase, isDatabaseAvailable, skipIfNoDatabase } from "../..
 import { row0DrawnNumbers } from "../../helpers/fixtures/card-cells.js";
 import { cleanupPrizeRoundFixture, createPrizeRoundFixture } from "../../helpers/fixtures/prize-round.js";
 
-describe("[integration][prizes] LINE uniquePerRound — deferred split pool at settlement", () => {
+describe("[integration][prizes] LINE — monto dividido entre ganadores de la misma bolilla", () => {
   let db = false;
 
   before(async () => {
@@ -22,7 +22,6 @@ describe("[integration][prizes] LINE uniquePerRound — deferred split pool at s
     if (skipIfNoDatabase(t, db)) return;
     const suffix = `ud-${Date.now()}`;
     const fx = await createPrizeRoundFixture({
-      uniquePerRound: true,
       suffix,
       prizePayoutMode: "DEFERRED_SPLIT_AT_ROUND_END",
     });

@@ -8,6 +8,7 @@ export type BingoFigure =
   | "LETTER_G"
   | "LETTER_O"
   | "PERIMETER"
+  | "JACKPOT"
   | "FULL_HOUSE";
 
 export type OccurrencePrize = {
@@ -65,6 +66,7 @@ export type LiveSnapshot = {
     scheduledStartsAt: string;
     drawMode: "VIRTUAL" | "LIVE";
     canMarkLiveBall?: boolean;
+    jackpotMaxBall?: number | null;
     prizes: OccurrencePrize[];
   };
 };
@@ -111,6 +113,8 @@ export type WalletTxDetail = {
   figure?: string;
   roundSequence?: number | null;
   depositNote?: string | null;
+  depositId?: string | null;
+  depositExternalRef?: string | null;
   roomSlug?: string | null;
   bingoId?: string | null;
   bingoRoundId?: string | null;

@@ -189,6 +189,7 @@ const FIGURE_LABEL: Record<string, string> = {
   LETTER_G: "Premio letra G",
   LETTER_O: "Premio letra O",
   PERIMETER: "Premio perímetro",
+  JACKPOT: "Jackpot",
   FULL_HOUSE: "Premio cartón lleno",
 };
 
@@ -218,6 +219,7 @@ const FIGURE_PRIZE_BADGE: Record<string, string> = {
   LETTER_G: "LETRA G",
   LETTER_O: "LETRA O",
   PERIMETER: "PERIMETRO",
+  JACKPOT: "JACKPOT",
   FULL_HOUSE: "CARTON LLENO",
 };
 
@@ -235,6 +237,7 @@ const PRIZE_FIGURE_ORDER = [
   "LETTER_G",
   "LETTER_O",
   "PERIMETER",
+  "JACKPOT",
   "FULL_HOUSE",
 ];
 
@@ -454,19 +457,27 @@ function formatConfiguredPrizeValue(p: OccurrencePrize): string {
   return `$ ${formatMoney(raw)}`;
 }
 
-function renderPrizesHtml(prizes: OccurrencePrize[]): string {
+function renderPrizesHtml(prizes: OccurrencePrize[], jackpotMaxBall: number | null | undefined): string {
   if (!prizes.length) {
     return `<p class="bd-muted">Este bingo no tiene premios configurados.</p>`;
   }
-  const ordered = [...prizes].sort((a, b) => a.figure.localeCompare(b.figure));
+  const orderIdx = (fig: string) => {
+    const i = PRIZE_FIGURE_ORDER.indexOf(fig);
+    return i >= 0 ? i : 999;
+  };
+  const ordered = [...prizes].sort((a, b) => orderIdx(a.figure) - orderIdx(b.figure));
   return ordered
-    .map(
-      (p) => `
-    <article class="bd-prize bd-card bd-card--prize">
-      <span class="bd-prize__lbl">${esc(FIGURE_LABEL[p.figure] ?? p.figure)}</span>
+    .map((p) => {
+      let label = FIGURE_LABEL[p.figure] ?? p.figure;
+      if (p.figure === "JACKPOT" && jackpotMaxBall) {
+        label = `${label} · antes de bola ${jackpotMaxBall}`;
+      }
+      return `
+    <article class="bd-prize bd-card bd-card--prize${p.figure === "JACKPOT" ? " bd-prize--jackpot" : ""}">
+      <span class="bd-prize__lbl">${esc(label)}</span>
       <span class="bd-prize__val mono">${esc(formatConfiguredPrizeValue(p))}</span>
-    </article>`,
-    )
+    </article>`;
+    })
     .join("");
 }
 
@@ -492,12 +503,41 @@ let bingoClosePipelineActive = false;
 let bingoCloseRafId = 0;
 const bingoCloseTimeouts: ReturnType<typeof setTimeout>[] = [];
 
-/** Aborta el GET /live/state anterior para que una respuesta lenta no pise un snapshot más nuevo. */
-let liveSnapshotAbort: AbortController | null = null;
+/** Secuencia monotónica: ignora respuestas de fetches viejos sin abortar en vuelo (evita quedar en 00:00). */
+let liveSnapshotFetchSeq = 0;
 
 /** Polling de respaldo si el SSE no avisa al terminar la cuenta regresiva. */
 let idleFastPollTimer: ReturnType<typeof setInterval> | null = null;
 let lastIdleTransitionFetchAt = 0;
+
+/** Tras 00:00 en idle: poll hasta que el servidor pase a `drawing` o cancele. */
+let transitionWatchTimer: ReturnType<typeof setInterval> | null = null;
+let transitionWatchStartedAt = 0;
+const TRANSITION_WATCH_MS = 800;
+const TRANSITION_WATCH_TIMEOUT_MS = 120_000;
+
+function clearTransitionWatch(): void {
+  if (transitionWatchTimer != null) {
+    clearInterval(transitionWatchTimer);
+    transitionWatchTimer = null;
+  }
+}
+
+function ensureTransitionWatch(): void {
+  if (transitionWatchTimer != null) return;
+  transitionWatchStartedAt = Date.now();
+  transitionWatchTimer = window.setInterval(() => {
+    if (lastSnap?.phase === "drawing") {
+      clearTransitionWatch();
+      return;
+    }
+    if (Date.now() - transitionWatchStartedAt > TRANSITION_WATCH_TIMEOUT_MS) {
+      clearTransitionWatch();
+      return;
+    }
+    fetchAndApplyLiveSnapshot();
+  }, TRANSITION_WATCH_MS);
+}
 
 function clearIdleFastPoll(): void {
   if (idleFastPollTimer != null) {
@@ -509,11 +549,13 @@ function clearIdleFastPoll(): void {
 function syncIdleFastPoll(s: LiveSnapshot | null): void {
   if (s?.phase !== "idle" || !s.nextScheduledAt) {
     clearIdleFastPoll();
+    clearTransitionWatch();
     return;
   }
   const remain = new Date(s.nextScheduledAt).getTime() - Date.now();
   if (remain > 45_000) {
     clearIdleFastPoll();
+    clearTransitionWatch();
     return;
   }
   if (idleFastPollTimer != null) return;
@@ -521,6 +563,7 @@ function syncIdleFastPoll(s: LiveSnapshot | null): void {
   idleFastPollTimer = window.setInterval(() => {
     fetchAndApplyLiveSnapshot();
   }, intervalMs);
+  if (remain <= 0) ensureTransitionWatch();
 }
 
 function snapshotTimeMs(s: LiveSnapshot): number {
@@ -534,20 +577,20 @@ function shouldApplyIncomingSnapshot(incoming: LiveSnapshot): boolean {
   return snapshotTimeMs(incoming) >= snapshotTimeMs(lastSnap);
 }
 
-/** GET consolidado: aborta peticiones previas y aplica solo si el snapshot no es más viejo que `lastSnap`. */
+/** GET consolidado: ignora respuestas obsoletas por secuencia y por `serverTime`. */
 function fetchAndApplyLiveSnapshot(onFetchError?: () => void): void {
-  liveSnapshotAbort?.abort();
-  liveSnapshotAbort = new AbortController();
-  const { signal } = liveSnapshotAbort;
-  void fetchLiveSnapshot(signal)
+  const seq = ++liveSnapshotFetchSeq;
+  void fetchLiveSnapshot()
     .then((s) => {
+      if (seq !== liveSnapshotFetchSeq) return;
       if (!shouldApplyIncomingSnapshot(s)) return;
       lastSnap = s;
       applySnapshot(s);
       tickClocks(s);
+      if (s.phase === "drawing") clearTransitionWatch();
     })
-    .catch((e) => {
-      if (e instanceof DOMException && e.name === "AbortError") return;
+    .catch(() => {
+      if (seq !== liveSnapshotFetchSeq) return;
       onFetchError?.();
     });
 }
@@ -1054,11 +1097,14 @@ function startRoundIntroCountdown(): void {
   const root = document.querySelector<HTMLElement>("#bd-root");
   const layer = document.querySelector<HTMLElement>("#bd-round-intro");
   const numEl = document.querySelector<HTMLElement>("#bd-round-intro-num");
-  if (!layer || !numEl || !root) return;
-
   const chain = roundIntroChainId;
   const reduced =
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (!layer || !numEl || !root) {
+    finishRoundOpeningSequence(chain);
+    return;
+  }
 
   if (reduced) {
     finishRoundOpeningSequence(chain);
@@ -1071,6 +1117,9 @@ function startRoundIntroCountdown(): void {
   root.classList.add("sd--round-intro");
   layer.hidden = false;
   layer.setAttribute("aria-hidden", "false");
+
+  const safetyId = window.setTimeout(() => finishRoundOpeningSequence(chain), 15_000);
+  roundIntroTimerIds.push(safetyId);
 
   const step = (idx: number): void => {
     if (chain !== roundIntroChainId) return;
@@ -1182,7 +1231,7 @@ function applySnapshotInner(s: LiveSnapshot): void {
 
   const prizesEl = document.querySelector<HTMLDivElement>("#bd-prizes");
   if (prizesEl) {
-    prizesEl.innerHTML = cur ? renderPrizesHtml(cur.prizes ?? []) : "";
+    prizesEl.innerHTML = cur ? renderPrizesHtml(cur.prizes ?? [], cur.jackpotMaxBall) : "";
   }
 
   const remainCount =
@@ -1310,6 +1359,7 @@ function applySnapshot(s: LiveSnapshot): void {
     cancelBingoClosing();
     clearBingoCloseHold();
     clearIdleFastPoll();
+    clearTransitionWatch();
     setRoundLiveMarkingClosed(false);
     roundOpeningHoldApply = true;
     applySnapshotInner(s);
@@ -1319,6 +1369,14 @@ function applySnapshot(s: LiveSnapshot): void {
   }
 
   if (live && roundOpeningHoldApply) {
+    const root = document.querySelector<HTMLElement>("#bd-root");
+    if (root?.classList.contains("sd--idle")) {
+      roundOpeningHoldApply = false;
+      applySnapshotInner(s);
+      lastAppliedPhase = s.phase;
+      tickClocks(s);
+      return;
+    }
     tickClocks(s);
     return;
   }
@@ -1375,6 +1433,7 @@ function tickClocks(s: LiveSnapshot | null): void {
     if (s.phase === "idle" && remainMs <= 45_000) {
       syncIdleFastPoll(s);
       if (remainMs <= 0) {
+        ensureTransitionWatch();
         const now = Date.now();
         if (now - lastIdleTransitionFetchAt >= 700) {
           lastIdleTransitionFetchAt = now;
@@ -1383,9 +1442,11 @@ function tickClocks(s: LiveSnapshot | null): void {
       }
     } else {
       clearIdleFastPoll();
+      clearTransitionWatch();
     }
   } else {
     clearIdleFastPoll();
+    clearTransitionWatch();
   }
 
   if (cdEl) cdEl.textContent = headerCd;
@@ -1410,8 +1471,14 @@ function connectEventSource(): void {
       },
       round_start: () => {
         prevLastBall = null;
+        clearTransitionWatch();
         fetchAndApplyLiveSnapshot();
         window.setTimeout(() => fetchAndApplyLiveSnapshot(), 400);
+        refreshUpcomingPanel?.();
+      },
+      round_cancelled: () => {
+        clearTransitionWatch();
+        fetchAndApplyLiveSnapshot();
         refreshUpcomingPanel?.();
       },
       round_end: () => {
@@ -1454,8 +1521,8 @@ function mountDisplay(host: HTMLElement): void {
 
   async function renderUpcoming() {
     try {
-      const data = await fetchUpcoming({ limit: 5, horizonDays: 14 });
-      const rows = data.upcoming.slice(0, 5);
+      const data = await fetchUpcoming({ limit: 3, horizonDays: 14 });
+      const rows = data.upcoming.slice(0, 3);
       if (!rows.length) {
         upcomingBody.innerHTML = `<p class="bd-muted">Sin fechas en el horizonte.</p>`;
         return;

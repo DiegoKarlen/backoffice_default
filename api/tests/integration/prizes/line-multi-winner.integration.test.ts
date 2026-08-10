@@ -7,7 +7,7 @@ import { disconnectDatabase, isDatabaseAvailable, skipIfNoDatabase } from "../..
 import { row0DrawnNumbers } from "../../helpers/fixtures/card-cells.js";
 import { cleanupPrizeRoundFixture, createPrizeRoundFixture } from "../../helpers/fixtures/prize-round.js";
 
-describe("[integration][prizes] LINE non-unique — both cards win same draw", () => {
+describe("[integration][prizes] LINE — both cards win on same ball", () => {
   let db = false;
 
   before(async () => {
@@ -21,7 +21,7 @@ describe("[integration][prizes] LINE non-unique — both cards win same draw", (
   it("credits both cards deferred then full LINE each at settlement", async (t) => {
     if (skipIfNoDatabase(t, db)) return;
     const suffix = `m-${Date.now()}`;
-    const fx = await createPrizeRoundFixture({ uniquePerRound: false, suffix });
+    const fx = await createPrizeRoundFixture({ suffix });
     try {
       const drawn = row0DrawnNumbers(fx.cellsA);
       const credited: string[] = [];

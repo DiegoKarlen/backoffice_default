@@ -12,6 +12,11 @@ import {
   validatePrizes,
   validateScheduleBounds,
 } from "../lib/bingo/bingo-crud.service.js";
+import {
+  mergeJackpotPrize,
+  stripJackpotPrizeFromList,
+  validateJackpotConfig,
+} from "../lib/bingo/bingo-jackpot.js";
 import { createBingoSchema, updateBingoSchema } from "../lib/bingo/bingo-schemas.js";
 import { toDecimalString } from "../lib/bingo/bingo-serializer.js";
 import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
@@ -88,7 +93,18 @@ bingosRouter.post(
       throw httpError(400, vErr);
     }
     const prizeMode = body.prizeMode ?? BingoPrizeMode.FIXED;
-    const pErr = validatePrizes(body.prizes, prizeMode, body.prizePoolSeed);
+    const jErr = validateJackpotConfig({
+      jackpotEnabled: body.jackpotEnabled,
+      jackpotMaxBall: body.jackpotMaxBall,
+      jackpotAmount: body.jackpotAmount,
+      bingoType: body.bingoType,
+    });
+    if (jErr) throw httpError(400, jErr);
+    const prizesForValidation = mergeJackpotPrize(body.prizes, {
+      enabled: body.jackpotEnabled === true,
+      amount: body.jackpotAmount,
+    });
+    const pErr = validatePrizes(prizesForValidation, prizeMode, body.prizePoolSeed);
     if (pErr) {
       throw httpError(400, pErr);
     }
@@ -140,12 +156,39 @@ bingosRouter.put(
       throw httpError(400, vErr);
     }
     const mergedPrizeMode = body.prizeMode ?? existing.prizeMode;
-    if (body.prizes !== undefined) {
+    const mergedJackpotEnabled =
+      body.jackpotEnabled !== undefined ? body.jackpotEnabled : existing.jackpotEnabled;
+    const mergedJackpotMaxBall =
+      body.jackpotMaxBall !== undefined ? body.jackpotMaxBall : existing.jackpotMaxBall;
+    const mergedJackpotAmount =
+      body.jackpotAmount !== undefined ? body.jackpotAmount : existing.jackpotAmount?.toString();
+    const mergedBingoType = body.bingoType ?? existing.bingoType;
+
+    const jErr = validateJackpotConfig({
+      jackpotEnabled: mergedJackpotEnabled,
+      jackpotMaxBall: mergedJackpotMaxBall,
+      jackpotAmount: mergedJackpotAmount,
+      bingoType: mergedBingoType,
+    });
+    if (jErr) throw httpError(400, jErr);
+
+    if (body.prizes !== undefined || body.jackpotEnabled !== undefined) {
       const mergedSeed =
         body.prizePoolSeed !== undefined ? body.prizePoolSeed : existing.prizePoolSeed.toString();
-      const pErr = validatePrizes(body.prizes, mergedPrizeMode, mergedSeed);
-      if (pErr) {
-        throw httpError(400, pErr);
+      const manualPrizes =
+        body.prizes !== undefined ? stripJackpotPrizeFromList(body.prizes) : [];
+      const prizesForValidation =
+        body.prizes !== undefined
+          ? mergeJackpotPrize(manualPrizes, {
+              enabled: mergedJackpotEnabled,
+              amount: mergedJackpotAmount,
+            })
+          : [];
+      if (body.prizes !== undefined) {
+        const pErr = validatePrizes(prizesForValidation, mergedPrizeMode, mergedSeed);
+        if (pErr) {
+          throw httpError(400, pErr);
+        }
       }
     } else if (body.prizeMode === BingoPrizeMode.PERCENTAGE) {
       const mergedSeed =

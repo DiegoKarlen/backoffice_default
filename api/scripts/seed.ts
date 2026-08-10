@@ -71,6 +71,37 @@ async function main() {
     },
     update: { name: "Manage players and wallet credits" },
   });
+  const fPayments = await prisma.functionality.upsert({
+    where: { code: "bo.payments.manage" },
+    create: {
+      code: "bo.payments.manage",
+      name: "Manage deposit payment methods",
+      module: "admin",
+    },
+    update: { name: "Manage deposit payment methods", module: "admin" },
+  });
+
+  await prisma.paymentMethod.upsert({
+    where: {
+      providerId_externalId: { providerId: "mixer-gaming", externalId: "84" },
+    },
+    create: {
+      id: "a1000000-0000-4000-8000-000000000084",
+      providerId: "mixer-gaming",
+      externalId: "84",
+      name: "PaymentTest",
+      currencyCode: "ARS",
+      minCents: 100,
+      maxCents: 50_000_000,
+      active: true,
+      sortOrder: 0,
+    },
+    update: {
+      name: "PaymentTest",
+      minCents: 100,
+      maxCents: 50_000_000,
+    },
+  });
 
   let adminRole = await prisma.role.findUnique({
     where: { code: "admin" },
@@ -91,6 +122,7 @@ async function main() {
             { functionality: { connect: { id: fBingo.id } } },
             { functionality: { connect: { id: fRoom.id } } },
             { functionality: { connect: { id: fPlayers.id } } },
+            { functionality: { connect: { id: fPayments.id } } },
           ],
         },
       },
@@ -108,6 +140,7 @@ async function main() {
       { roleId: adminRole.id, functionalityId: fBingo.id },
       { roleId: adminRole.id, functionalityId: fRoom.id },
       { roleId: adminRole.id, functionalityId: fPlayers.id },
+      { roleId: adminRole.id, functionalityId: fPayments.id },
     ],
     skipDuplicates: true,
   });

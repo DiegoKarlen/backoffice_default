@@ -8,6 +8,7 @@ import { creditWalletManualDeposit } from "../services/wallet.js";
 import { creditPrizeToWinner } from "../services/prize-payout.js";
 import { listWalletTransactionsForPlayer } from "../lib/wallet-transactions-for-player.js";
 import { getWalletTransactionCardDetail } from "../lib/wallet-transaction-card-detail.js";
+import { getPlayerDepositAudit } from "../payments/deposit.service.js";
 
 export const playersRouter = Router();
 
@@ -145,6 +146,24 @@ playersRouter.get(
       createdAtTo,
     });
     res.json(payload);
+  }),
+);
+
+/** Auditoría de depósito (initiate + webhook request/response). */
+playersRouter.get(
+  "/:playerId/deposits/:depositId",
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const pPlayer = uuidParam.safeParse(req.params.playerId);
+    const pDeposit = uuidParam.safeParse(req.params.depositId);
+    if (!pPlayer.success || !pDeposit.success) {
+      throw httpError(400, "Invalid id");
+    }
+    try {
+      const audit = await getPlayerDepositAudit(pPlayer.data, pDeposit.data);
+      res.json(audit);
+    } catch {
+      throw httpError(404, "Deposit not found");
+    }
   }),
 );
 

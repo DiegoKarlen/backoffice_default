@@ -31,6 +31,7 @@ function cancellationReasonLabel(code) {
   }
   const map = {
     MIN_CARTONS_NOT_MET: "bingo.roundCancelMinCartons",
+    MIN_PLAYERS_NOT_MET: "bingo.roundCancelMinPlayers",
     ROOM_DRAW_IN_PROGRESS: "bingo.roundCancelRoomDrawInProgress",
     MANUAL_STOP: "bingo.roundCancelManualStop",
     BINGO_INACTIVE: "bingo.roundCancelBingoInactive",

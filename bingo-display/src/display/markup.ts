@@ -27,12 +27,6 @@ export const DISPLAY_MARKUP = `
       <div class="bd-live-video" id="bd-live-video">
         <span class="bd-live-video__label">TRANSMISIÓN EN VIVO</span>
       </div>
-      <div class="bd-live-ball-hero" id="bd-live-ball-hero" aria-label="Última bola sorteada">
-        <div class="bd-bola-actual bd-live-bola-actual" id="bd-live-current-disk">
-          <img class="bd-bola-actual__img" id="bd-live-current-ball-img" hidden alt="" />
-          <div id="bd-live-current-num" class="bd-bola-actual__num mono bd-bola-actual__num--ghost" aria-live="polite">—</div>
-        </div>
-      </div>
     </section>
 
     <div class="bd-fly" id="bd-fly-layer">
@@ -114,9 +108,19 @@ export const DISPLAY_MARKUP = `
       </div>
     </aside>
 
-    <aside class="bd-rail bd-rail--der sd-show-live" aria-label="Próximos sorteos">
-      <h2 class="bd-rail-title">Próximos sorteos</h2>
-      <div id="bd-upcoming-body"><p class="bd-muted">Cargando…</p></div>
+    <aside class="bd-rail bd-rail--der sd-show-live" aria-label="Sorteo en vivo y próximos sorteos">
+      <div class="bd-rail-der__ball-wrap">
+        <div class="bd-live-ball-hero" id="bd-live-ball-hero" aria-label="Última bola sorteada">
+          <div class="bd-bola-actual bd-live-bola-actual" id="bd-live-current-disk">
+            <img class="bd-bola-actual__img" id="bd-live-current-ball-img" hidden alt="" />
+            <div id="bd-live-current-num" class="bd-bola-actual__num mono bd-bola-actual__num--ghost" aria-live="polite">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="bd-rail-der__upcoming">
+        <h2 class="bd-rail-title">Próximos sorteos</h2>
+        <div id="bd-upcoming-body"><p class="bd-muted">Cargando…</p></div>
+      </div>
     </aside>
 
     <section class="bd-historial-panel sd-show-live" aria-label="Últimas bolas">

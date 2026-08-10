@@ -56,8 +56,8 @@ Integration tests need `DATABASE_URL` in `api/.env`. If Postgres is down, those 
 
 | File | Scenario |
 |------|----------|
-| `prizes/line-unique-full-per-winner.integration.test.ts` | uniquePerRound → full LINE each at settlement |
-| `prizes/line-unique-deferred-split.integration.test.ts` | uniquePerRound → 50/50 split at settlement |
+| `prizes/line-unique-full-per-winner.integration.test.ts` | LINE: monto completo por ganador al liquidar |
+| `prizes/line-unique-deferred-split.integration.test.ts` | LINE: reparto 50/50 entre ganadores de la misma bolilla |
 | `prizes/line-multi-winner.integration.test.ts` | non-unique → both cards win |
 | `prizes/inactive-player-skipped.integration.test.ts` | inactive player excluded |
 | `prizes/idempotent-same-draw.integration.test.ts` | repeat evaluate → no duplicate deferred |

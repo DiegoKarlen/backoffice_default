@@ -52,7 +52,6 @@ export async function cleanupPrizeRoundFixture(ids: PrizeRoundFixtureIds): Promi
 }
 
 export async function createPrizeRoundFixture(params: {
-  uniquePerRound: boolean;
   suffix: string;
   prizePayoutMode?: "IMMEDIATE_FULL_PER_WINNER" | "DEFERRED_SPLIT_AT_ROUND_END";
 }): Promise<PrizeRoundFixture> {
@@ -90,7 +89,6 @@ export async function createPrizeRoundFixture(params: {
           {
             figure: "LINE" as BingoFigure,
             amount: new Prisma.Decimal("10.0000"),
-            uniquePerRound: params.uniquePerRound,
           },
         ],
       },

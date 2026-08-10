@@ -18,6 +18,16 @@ export async function countSoldCartons(bingoRoundId: string): Promise<number> {
   return prisma.playerRoundCard.count({ where: { bingoRoundId } });
 }
 
+/** Jugadores distintos con al menos un cartón en la partida (`minPlayersToStart`). */
+export async function countDistinctPlayersWithCartons(bingoRoundId: string): Promise<number> {
+  const rows = await prisma.playerRoundCard.findMany({
+    where: { bingoRoundId },
+    distinct: ["playerId"],
+    select: { playerId: true },
+  });
+  return rows.length;
+}
+
 /** Solo desde `SCHEDULED` → evita marcar `DRAWING` una partida que no sorteará. */
 export async function cancelScheduledRound(
   bingoRoundId: string,
@@ -34,10 +44,14 @@ export async function cancelScheduledRound(
 }
 
 export async function cancelRoundForMinCartons(bingoRoundId: string): Promise<boolean> {
-  return cancelScheduledRound(bingoRoundId, BingoRoundCancelReason.MIN_CARTONS_NOT_MET);
+  return cancelRoundForMinPlayers(bingoRoundId);
 }
 
-/** Transición atómica `SCHEDULED` → `DRAWING` tras validar cupo mínimo. */
+export async function cancelRoundForMinPlayers(bingoRoundId: string): Promise<boolean> {
+  return cancelScheduledRound(bingoRoundId, BingoRoundCancelReason.MIN_PLAYERS_NOT_MET);
+}
+
+/** Transición atómica `SCHEDULED` → `DRAWING` tras validar cupo mínimo de jugadores. */
 export async function promoteRoundToDrawing(bingoRoundId: string): Promise<boolean> {
   const result = await prisma.bingoRound.updateMany({
     where: { id: bingoRoundId, status: BingoRoundStatus.SCHEDULED },

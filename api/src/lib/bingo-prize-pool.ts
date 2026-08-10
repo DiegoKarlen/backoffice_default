@@ -1,4 +1,4 @@
-import { BingoPrizeMode, type BingoPrize, type Prisma } from "@prisma/client";
+import { BingoPrizeMode, type BingoFigure, type BingoPrize, type Prisma } from "@prisma/client";
 import { decimalPriceToCents } from "./money.js";
 import { prisma } from "./prisma.js";
 
@@ -24,10 +24,13 @@ export async function computeRoundPrizePoolCents(
 
 export function computePrizePayoutCents(
   prizeMode: BingoPrizeMode,
-  prize: { amount: Pick<BingoPrize, "amount">["amount"] | string },
+  prize: { amount: Pick<BingoPrize, "amount">["amount"] | string; figure?: BingoFigure },
   roundPoolCents: number,
 ): number {
   const amount = typeof prize.amount === "string" ? prize.amount : prize.amount.toString();
+  if (prize.figure === "JACKPOT") {
+    return decimalPriceToCents(amount);
+  }
   if (prizeMode === BingoPrizeMode.PERCENTAGE) {
     const pct = Number(amount);
     if (!Number.isFinite(pct) || pct <= 0) return 0;

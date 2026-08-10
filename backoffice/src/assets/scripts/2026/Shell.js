@@ -48,6 +48,14 @@ export const NAV = [
         icon:
           '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-3 4-5 8-5s8 2 8 5"/>',
       },
+      {
+        key: "admin-payment-methods",
+        textKey: "nav.items.paymentMethods",
+        href: "admin-payment-methods.html",
+        func: "bo.payments.manage",
+        icon:
+          '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+      },
     ],
   },
   {

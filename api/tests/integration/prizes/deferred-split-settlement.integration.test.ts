@@ -22,7 +22,6 @@ describe("[integration][prizes] deferred split — settlement clears deferred ro
     if (skipIfNoDatabase(t, db)) return;
     const suffix = `d-${Date.now()}`;
     const fx = await createPrizeRoundFixture({
-      uniquePerRound: false,
       suffix,
       prizePayoutMode: "DEFERRED_SPLIT_AT_ROUND_END",
     });

@@ -16,6 +16,7 @@
     "test:integration": "tsx scripts/run-tests.mts integration",
     "test:prizes": "tsx scripts/run-tests.mts prizes",
     "test:wallet": "tsx scripts/run-tests.mts wallet",
+    "test:deposit-webhook": "tsx scripts/run-deposit-webhook-test.ts",
     "test:engine": "tsx scripts/run-tests.mts engine",
     "test:lib": "tsx scripts/run-tests.mts lib",
     "test:list": "tsx scripts/run-tests.mts --list"

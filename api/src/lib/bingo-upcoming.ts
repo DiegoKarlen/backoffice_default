@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { env } from "../config/env.js";
 import { bingoPrizeDisplayAmount } from "./bingo-prize-display.js";
+import { roundStartsAtMs } from "./bingo-rounds-sync.js";
 import { prisma } from "./prisma.js";
 
 export type UpcomingPrize = {
@@ -248,7 +249,7 @@ async function computeUpcomingPayload(
       const k = `${o.bingoId}:${o.startsAtMs}`;
       if (pairSeen.has(k)) continue;
       pairSeen.add(k);
-      orPairs.push({ bingoId: o.bingoId, startsAt: new Date(o.startsAtMs) });
+      orPairs.push({ bingoId: o.bingoId, startsAt: new Date(roundStartsAtMs(o.startsAtMs)) });
     }
     const rounds = await prisma.bingoRound.findMany({
       where: { OR: orPairs },
@@ -257,11 +258,11 @@ async function computeUpcomingPayload(
     const roundMeta = new Map(
       rounds.map(
         (r) =>
-          [`${r.bingoId}:${r.startsAt.getTime()}`, { sequence: r.sequence, id: r.id }] as const,
+          [`${r.bingoId}:${roundStartsAtMs(r.startsAt)}`, { sequence: r.sequence, id: r.id }] as const,
       ),
     );
     trimmed = trimmedRaw.map((o) => {
-      const meta = roundMeta.get(`${o.bingoId}:${o.startsAtMs}`);
+      const meta = roundMeta.get(`${o.bingoId}:${roundStartsAtMs(o.startsAtMs)}`);
       return {
         ...o,
         roundSequence: meta?.sequence ?? null,

@@ -105,8 +105,8 @@ Implementación: `bingo/bingo-75/prize-evaluator.ts` + `prize-winner-order.ts`.
 |-------|----------------|
 | Orden de figuras | LINE → PERIMETER → FULL_HOUSE (`BINGO_FIGURE_EVAL_ORDER`) |
 | Liquidación en wallet | **Siempre al cerrar la partida** (`settleDeferredSplitPrizesForRound` al pasar a `COMPLETED`). Durante el sorteo solo se registran ganadores en `DeferredRoundPrizeWin`; SSE `prize_awarded` lleva `deferredSettlement` y **sin** `amountCents`. |
-| `prizePayoutMode` (BO / `Bingo`) | Define **cómo** se reparte al cierre (no el momento): `IMMEDIATE_FULL_PER_WINNER` (default) = cada ganador cobra el **monto completo** del premio; `DEFERRED_SPLIT_AT_ROUND_END` = el monto configurado por figura se **divide** entre todos los ganadores de esa figura en la partida. |
-| `uniquePerRound` (BO) | Por premio: si está activo (default), la figura se paga **una vez** por partida (primera bolilla en que alguien la cumple). Varios cartones en **esa misma bolilla**: todos entran al reparto al cierre. Quien la cumple después no entra. Si está desactivado, cada cartón elegible entra al liquidar al cierre. |
+| `prizePayoutMode` (BO / `Bingo`) | Define **cómo** se reparte al cierre (no el momento): `IMMEDIATE_FULL_PER_WINNER` (default) = cada ganador cobra el **monto completo** del premio; `DEFERRED_SPLIT_AT_ROUND_END` = el monto configurado por figura se **divide** entre todos los ganadores de esa figura en la **misma bolilla**. |
+| Figura por partida | Cada figura se paga **una sola vez** por partida (primera bolilla en que alguien la cumple). Varios cartones en **esa misma bolilla** entran al reparto; quien la cumple en bolas posteriores **no** cobra. |
 | Desempate en reparto | Al dividir centavos del pozo (`DEFERRED_SPLIT_AT_ROUND_END`), orden `createdAt` → `cardIndex` → `id` para repartir el resto (+1 céntimo) |
 | Mismo cartón | Puede ganar varias figuras distintas a lo largo del sorteo |
 | Fin de partida | Cuando **cualquier** cartón completa FULL_HOUSE; premios menores no cortan el sorteo |
@@ -126,7 +126,7 @@ Implementación: `lib/bingo-round-kickoff.ts` + `live-session.ts` → `beginSche
 | Otra partida en la sala | Si ya hay un sorteo `DRAWING` en la misma sala a la hora de `startsAt`, la partida nueva queda `CANCELLED` (`ROOM_DRAW_IN_PROGRESS`) + reembolso de cartones; **no** se encola. |
 | Cupo OK | `SCHEDULED` → `DRAWING` (atómico) y luego SSE `round_start` + bolillas. |
 
-Con `uniquePerRound`, la misma bolilla no excluye a nadie: todos los cartones que completan la figura en esa bolilla entran. El desempate por compra solo ordena el reparto de céntimos sobrantes al liquidar en modo diferido.
+La misma bolilla no excluye a nadie: todos los cartones que completan la figura en esa bolilla entran. El desempate por compra solo ordena el reparto de céntimos sobrantes al liquidar en modo dividido.
 
 ---
 

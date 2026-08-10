@@ -4,7 +4,7 @@
 import { api } from "./bo-api.js";
 import { t, applyDomI18n } from "./bo-i18n.js";
 import { attachBoPager, pagerAnchorFromTbody } from "./bo-pager.js";
-import { esc, formatBoMoneyFromCents } from "./bo-shared.js";
+import { esc, formatBoMoneyFromCents, moneyLocaleTag } from "./bo-shared.js";
 
 function showToast(el, msg, isError) {
   if (!el) return;
@@ -40,7 +40,8 @@ function walletDetailLine(tx) {
     return "—";
   }
   if (detail.kind === "deposit") {
-    return "";
+    const ref = detail.depositExternalRef ?? detail.depositNote;
+    return ref ? String(ref) : "—";
   }
   if (detail.kind === "adjustment") {
     return "";
@@ -156,7 +157,9 @@ function paintWalletRows(rows) {
 function renderWalletLedgerFromCache() {
   if (!walletLedgerCache) return;
   const tbody = document.getElementById("bo-player-wallet-tbody");
-  const anchor = tbody ? pagerAnchorFromTbody(tbody) : null;
+  const anchor =
+    document.getElementById("bo-player-wallet-table-wrap") ??
+    (tbody ? pagerAnchorFromTbody(tbody) : null);
   if (!walletPager && anchor) {
     walletPager = attachBoPager({
       anchor,
@@ -201,9 +204,8 @@ function figureLabel(fig) {
  */
 function renderWalletRow(tx) {
   const amount = Number(tx.amountCents);
-  const amtSign = amount < 0 ? "wallet-amt--out" : "wallet-amt--in";
   const when = tx.createdAt ? new Date(String(tx.createdAt)).toLocaleString(moneyLocaleTag()) : "—";
-  const d = /** @type {{ roomName?: string | null; bingoName?: string | null; roundSequence?: number | null }} */ (
+  const d = /** @type {{ roomName?: string | null; bingoName?: string | null; roundSequence?: number | null; depositId?: string | null; depositExternalRef?: string | null }} */ (
     tx.detail || {}
   );
   const room = d.roomName != null && String(d.roomName).trim() !== "" ? String(d.roomName) : "—";
@@ -215,26 +217,33 @@ function renderWalletRow(tx) {
   const detailText = walletDetailLine(tx);
   const typ = String(tx.type);
   const showCardBtn = typ === "CARTON_PURCHASE" || typ === "PRIZE_CREDIT";
+  const showDepositBtn = typ === "DEPOSIT" && d.depositId;
   const btnHtml = showCardBtn
     ? `<button type="button" class="btn btn--ghost btn--sm bo-wallet-open-card" data-wallet-tx-id="${esc(String(tx.id))}">${esc(t("players.walletDetailViewBtn"))}</button>`
-    : "";
+    : showDepositBtn
+      ? `<button type="button" class="btn btn--ghost btn--sm bo-wallet-open-deposit" data-deposit-id="${esc(String(d.depositId))}">${esc(t("players.walletDepositDetailBtn"))}</button>`
+      : "";
   const detailParts = [];
   const showDetailText =
     detailText !== "" && detailText !== "—" && typ !== "PRIZE_CREDIT";
-  if (showDetailText) detailParts.push(`<span>${esc(detailText)}</span>`);
+  if (showDetailText) {
+    detailParts.push(`<span class="bo-wallet-detail-ref">${esc(detailText)}</span>`);
+  }
   if (btnHtml) detailParts.push(btnHtml);
   const detailTd =
     detailParts.length > 0
-      ? `<div class="bo-wallet-detail-stack">${detailParts.join("")}</div>`
+      ? `<div class="bo-wallet-detail-actions">${detailParts.join("")}</div>`
       : "";
 
+  const amtClass = amount < 0 ? "neg" : "pos";
+
   return `<tr>
-    <td class="mono">${esc(when)}</td>
+    <td class="cell-date mono">${esc(when)}</td>
     <td>${esc(walletTypeLabel(typ))}</td>
     <td>${esc(room)}</td>
     <td>${esc(bingo)}</td>
     <td class="mono">${esc(partida)}</td>
-    <td class="mono ${amtSign}">${esc(formatBoMoneyFromCents(amount))}<span class="field-help"> (${esc(String(tx.amountCents))})</span></td>
+    <td class="cell-price ${amtClass}">${esc(formatBoMoneyFromCents(amount))}</td>
     <td class="mono">${esc(formatBoMoneyFromCents(tx.balanceAfterCents))}</td>
     <td>${detailTd}</td>
   </tr>`;
@@ -433,6 +442,68 @@ async function openWalletCardDetail(walletTxId) {
   }
 }
 
+/**
+ * @param {unknown} value
+ */
+function formatAuditJson(value) {
+  if (value == null) return "—";
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * @param {string} depositId
+ */
+async function openWalletDepositDetail(depositId) {
+  const playerId = /** @type {HTMLInputElement | null} */ (document.getElementById("bo-player-wallet-player-id"))
+    ?.value?.trim();
+  const dialog = /** @type {HTMLDialogElement | null} */ (document.getElementById("bo-wallet-deposit-dialog"));
+  const body = document.getElementById("bo-wallet-deposit-dialog-body");
+  const titleEl = document.getElementById("bo-wallet-deposit-dialog-title");
+  if (!playerId || !dialog || !body || !titleEl) return;
+
+  body.innerHTML = `<p class="field-help">${esc(t("players.walletDepositDetailLoading"))}</p>`;
+  dialog.showModal();
+  applyDomI18n(dialog);
+
+  try {
+    const data = /** @type {Record<string, unknown>} */ (await api.players.depositDetail(playerId, depositId));
+    const rows = [
+      ["ID", data.id],
+      [t("players.walletDepositColStatus"), data.status],
+      [t("players.walletDepositColProvider"), data.providerId],
+      [t("players.walletDepositColMethod"), data.paymentMethodName ?? data.paymentMethodId],
+      [t("players.walletDepositColExternalRef"), data.externalRef],
+      [
+        t("players.walletDepositColAmount"),
+        formatBoMoneyFromCents(Number(data.amountCents), String(data.currencyCode ?? "ARS")),
+      ],
+      [t("players.walletDepositColCreated"), data.createdAt ? new Date(String(data.createdAt)).toLocaleString(moneyLocaleTag()) : "—"],
+      [t("players.walletDepositColCompleted"), data.completedAt ? new Date(String(data.completedAt)).toLocaleString(moneyLocaleTag()) : "—"],
+      [t("players.walletDepositColWebhookAt"), data.webhookReceivedAt ? new Date(String(data.webhookReceivedAt)).toLocaleString(moneyLocaleTag()) : "—"],
+    ];
+    let html = `<dl class="bo-wallet-deposit-meta">${rows
+      .map(
+        ([label, val]) =>
+          `<div class="bo-wallet-deposit-meta__row"><dt>${esc(String(label))}</dt><dd class="mono">${esc(val != null && String(val).trim() !== "" ? String(val) : "—")}</dd></div>`,
+      )
+      .join("")}</dl>`;
+    if (data.failedReason) {
+      html += `<p class="field-help bo-wallet-deposit-fail">${esc(String(data.failedReason))}</p>`;
+    }
+    html += `<details class="bo-wallet-deposit-audit"><summary>${esc(t("players.walletDepositInitiatePayload"))}</summary><pre class="bo-wallet-deposit-pre">${esc(formatAuditJson(data.providerPayload))}</pre></details>`;
+    html += `<details class="bo-wallet-deposit-audit"><summary>${esc(t("players.walletDepositWebhookPayload"))}</summary><pre class="bo-wallet-deposit-pre">${esc(formatAuditJson(data.webhookPayload))}</pre></details>`;
+    html += `<details class="bo-wallet-deposit-audit"><summary>${esc(t("players.walletDepositWebhookResponse"))}</summary><pre class="bo-wallet-deposit-pre">${esc(formatAuditJson(data.webhookResponse))}</pre></details>`;
+    body.innerHTML = html;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    body.innerHTML = `<p>${esc(msg)}</p>`;
+  }
+}
+
 function wireWalletCardDetailUiOnce() {
   const wrap = document.getElementById("bo-player-wallet-wrap");
   if (!wrap || wrap.dataset.cardDetailWired) return;
@@ -441,9 +512,16 @@ function wireWalletCardDetailUiOnce() {
     const el = ev.target;
     if (!(el instanceof Element)) return;
     const btn = el.closest(".bo-wallet-open-card");
-    if (!btn) return;
-    const txId = btn.getAttribute("data-wallet-tx-id");
-    if (txId) void openWalletCardDetail(txId);
+    if (btn) {
+      const txId = btn.getAttribute("data-wallet-tx-id");
+      if (txId) void openWalletCardDetail(txId);
+      return;
+    }
+    const depBtn = el.closest(".bo-wallet-open-deposit");
+    if (depBtn) {
+      const depositId = depBtn.getAttribute("data-deposit-id");
+      if (depositId) void openWalletDepositDetail(depositId);
+    }
   });
 
   const dlg = document.getElementById("bo-wallet-card-dialog");
@@ -454,6 +532,16 @@ function wireWalletCardDetailUiOnce() {
   dlg?.addEventListener("cancel", (e) => {
     e.preventDefault();
     /** @type {HTMLDialogElement | null} */ (dlg)?.close();
+  });
+
+  const depDlg = document.getElementById("bo-wallet-deposit-dialog");
+  const depCloseBtn = document.getElementById("bo-wallet-deposit-dialog-close");
+  depCloseBtn?.addEventListener("click", () => {
+    /** @type {HTMLDialogElement | null} */ (depDlg)?.close();
+  });
+  depDlg?.addEventListener("cancel", (e) => {
+    e.preventDefault();
+    /** @type {HTMLDialogElement | null} */ (depDlg)?.close();
   });
 }
 

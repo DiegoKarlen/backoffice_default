@@ -30,6 +30,7 @@ export class BingoLiveSession implements LiveSchedulerHost {
   private drawMode: BingoDrawMode = BingoDrawMode.VIRTUAL;
   private scheduledStartsAt: string | null = null;
   private currentPrizeMode: string | null = null;
+  private jackpotMaxBall: number | null = null;
   private currentPrizes: Array<{ figure: BingoFigure; amount: string; displayAmount: string }> | null =
     null;
   private queue: number[] = [];
@@ -88,7 +89,7 @@ export class BingoLiveSession implements LiveSchedulerHost {
       figure: p.figure,
       amount: p.amount,
       displayAmount: p.displayAmount,
-      payoutCents: computePrizePayoutCents(mode, { amount: p.amount }, pool),
+      payoutCents: computePrizePayoutCents(mode, { amount: p.amount, figure: p.figure }, pool),
     }));
   }
 
@@ -168,6 +169,7 @@ export class BingoLiveSession implements LiveSchedulerHost {
               drawMode: this.drawMode,
               canMarkLiveBall: this.drawMode === BingoDrawMode.LIVE && this.phase === "drawing",
               prizeMode: this.currentPrizeMode ?? "FIXED",
+              jackpotMaxBall: this.jackpotMaxBall,
               prizes: this.mapPrizesForSnapshot(),
             },
     };
@@ -186,6 +188,7 @@ export class BingoLiveSession implements LiveSchedulerHost {
     this.drawMode = ctx.bingo.drawMode;
     this.scheduledStartsAt = ctx.occ.startsAt;
     this.currentPrizeMode = ctx.bingo.prizeMode;
+    this.jackpotMaxBall = ctx.bingo.jackpotEnabled ? ctx.bingo.jackpotMaxBall : null;
     this.currentPrizes = ctx.bingo.prizes;
     this.queue = [...ctx.ballQueue];
     this.drawn = [];
@@ -235,6 +238,7 @@ export class BingoLiveSession implements LiveSchedulerHost {
     this.scheduledStartsAt = null;
     this.currentPrizeMode = null;
     this.currentPrizes = null;
+    this.jackpotMaxBall = null;
     this.roundPoolCents = 0;
     this.queue = [];
     this.drawn = [];
@@ -458,6 +462,7 @@ export class BingoLiveSession implements LiveSchedulerHost {
     this.scheduledStartsAt = null;
     this.currentPrizeMode = null;
     this.currentPrizes = null;
+    this.jackpotMaxBall = null;
     this.queue = [];
     this.drawn = [];
     this.broadcast("idle", { message: "Sesión detenida manualmente" });

@@ -105,6 +105,7 @@ enum BingoFigure {
   LETTER_G
   LETTER_O
   PERIMETER
+  JACKPOT
   FULL_HOUSE
 }
 
@@ -152,6 +153,10 @@ model Bingo {
   minPlayersToStart  Int          @default(2)
   prizePayoutMode    PrizePayoutMode @default(IMMEDIATE_FULL_PER_WINNER)
   drawMode           BingoDrawMode @default(VIRTUAL)
+  /// Si true, cartón lleno antes de `jackpotMaxBall` gana el premio JACKPOT (monto fijo).
+  jackpotEnabled     Boolean       @default(false)
+  jackpotMaxBall     Int?
+  jackpotAmount      Decimal?      @db.Decimal(14, 4)
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   createdByUserId    String?
@@ -215,8 +220,6 @@ model BingoPrize {
   figure          BingoFigure
   /// Monto fijo (ARS) o % del pozo (0–100), según `Bingo.prizeMode`.
   amount          Decimal              @db.Decimal(14, 4)
-  /// Si true, como máximo un cartón gana este premio por partida; si false, cada cartón elegible cobra el monto completo.
-  uniquePerRound  Boolean              @default(true)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   payouts         PrizePayout[]
@@ -251,6 +254,14 @@ model Player {
   active          Boolean   @default(true)
   emailVerifiedAt DateTime?
   lastLoginAt     DateTime?
+  /// ID numérico estable para gateways de pago (MixerGaming `user_id`).
+  paymentsUserId  Int       @unique @default(autoincrement())
+  firstName       String?
+  lastName        String?
+  phone           String?
+  phoneCode       String?   @default("54")
+  dni             String?
+  countryCode     String?   @default("AR")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -302,19 +313,54 @@ model WalletTransaction {
   @@index([type])
 }
 
+/// Configurable deposit gateway method (enabled/disabled from backoffice).
+model PaymentMethod {
+  id           String   @id @default(uuid())
+  providerId   String
+  /// Gateway-side method id (e.g. Mixer payment_method "84").
+  externalId   String
+  name         String
+  currencyCode String   @default("ARS")
+  minCents     Int
+  maxCents     Int
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deposits Deposit[]
+
+  @@unique([providerId, externalId])
+  @@index([active, sortOrder])
+}
+
 model Deposit {
-  id           String        @id @default(uuid())
-  playerId     String
-  player       Player        @relation(fields: [playerId], references: [id], onDelete: Restrict)
-  amountCents  Int
-  currencyCode String        @default("ARS")
-  status       DepositStatus @default(PENDING)
-  externalRef  String?
-  createdAt    DateTime      @default(now())
-  completedAt  DateTime?
+  id                String         @id @default(uuid())
+  playerId          String
+  player            Player         @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  amountCents       Int
+  currencyCode      String         @default("ARS")
+  status            DepositStatus  @default(PENDING)
+  providerId        String?
+  paymentMethodId   String?
+  paymentMethod     PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  paymentMethodName String?
+  /// Gateway transaction id (set at initiate; used to match webhooks).
+  externalRef            String?
+  /// Gateway response when the deposit was initiated (create transaction).
+  providerPayload        Json?
+  /// Raw JSON body received from the gateway webhook.
+  webhookPayload         Json?
+  /// JSON body we returned to the gateway for this webhook call.
+  webhookResponse        Json?
+  webhookReceivedAt      DateTime?
+  failedReason           String?
+  createdAt              DateTime      @default(now())
+  completedAt            DateTime?
 
   walletTransaction WalletTransaction?
 
+  @@unique([providerId, externalRef])
   @@index([playerId, createdAt])
 }
 

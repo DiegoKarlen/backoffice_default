@@ -10,12 +10,22 @@ import { isSessionHandledError } from "../lib/session.js";
 import type { LiveSnap, MyCardRow, PpTab } from "../types.js";
 import { renderRoundsTable } from "./buy.js";
 import { renderMyCardsHtml, repopulateCardsBingoRound, uniqueRoomSlugsFromCards } from "./cards.js";
+import { isPaymentsEnabled, mountDepositView } from "../payments/index.js";
 import { readSavedTab, setActiveTab } from "./shell.js";
 import { renderTxList, repopulateTxBingoRound } from "./transactions.js";
 
 const formatMoney = formatMoneyFromCents;
 
-export async function mountDashboard(root: HTMLElement, msg: HTMLElement | null, onRerender: () => void): Promise<void> {
+export type DashboardMountOptions = {
+  depositReturnId?: string | null;
+};
+
+export async function mountDashboard(
+  root: HTMLElement,
+  msg: HTMLElement | null,
+  onRerender: () => void,
+  options?: DashboardMountOptions,
+): Promise<void> {
   disconnectAllLiveStreams();
 
   const liveSnapshots = new Map<string, LiveSnap>();
@@ -311,15 +321,34 @@ export async function mountDashboard(root: HTMLElement, msg: HTMLElement | null,
   panel.appendChild(viewCards);
   panel.appendChild(viewTx);
 
+  if (isPaymentsEnabled()) {
+    const viewDeposit = el(`<section class="pp-view" data-view="deposit" id="view-deposit" hidden></section>`);
+    const depositHost = el(`<div id="pp-deposit-host"></div>`);
+    viewDeposit.appendChild(depositHost);
+    panel.appendChild(viewDeposit);
+
+    mountDepositView(depositHost, {
+      currencyCode: currency,
+      depositReturnId: options?.depositReturnId ?? null,
+      showMessage: (text) => {
+        if (msg) msg.textContent = text;
+      },
+      onBalanceChanged: () => refreshAfterPurchase(),
+    });
+  }
+
   syncLiveConnections(initialSlugs);
 
-  const initialTab = readSavedTab();
+  let initialTab = readSavedTab();
+  if (options?.depositReturnId && isPaymentsEnabled()) {
+    initialTab = "deposit";
+  }
   setActiveTab(root, initialTab);
 
   root.querySelectorAll(".pp-nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const v = (btn as HTMLButtonElement).getAttribute("data-view") as PpTab | null;
-      if (v === "buy" || v === "cards" || v === "tx") setActiveTab(root, v);
+      if (v === "buy" || v === "cards" || v === "tx" || v === "deposit") setActiveTab(root, v);
     });
   });
 

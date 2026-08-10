@@ -14,6 +14,8 @@ import { bingosRouter } from "./routes/bingos.js";
 import { publicBingosRouter } from "./routes/public-bingos.js";
 import { playersRouter } from "./routes/players.js";
 import { playerPortalRouter } from "./routes/player-portal.js";
+import { paymentMethodsRouter } from "./routes/payment-methods.js";
+import { registerPlayerDepositRoutes, registerPaymentWebhookRoutes } from "./payments/index.js";
 
 const app = express();
 app.use(
@@ -46,6 +48,9 @@ app.use("/functionalities", functionalitiesRouter);
 app.use("/backoffice/rooms", roomsRouter);
 app.use("/backoffice/bingos", bingosRouter);
 app.use("/backoffice/players", playersRouter);
+app.use("/backoffice/payment-methods", paymentMethodsRouter);
+registerPlayerDepositRoutes(playerPortalRouter);
+registerPaymentWebhookRoutes(app);
 app.use("/player", playerPortalRouter);
 app.use("/public/bingos", publicBingosRouter);
 

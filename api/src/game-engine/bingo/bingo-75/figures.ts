@@ -19,6 +19,7 @@ export const BINGO_FIGURE_EVAL_ORDER: BingoFigure[] = [
   "LETTER_G",
   "LETTER_O",
   "PERIMETER",
+  "JACKPOT",
   "FULL_HOUSE",
 ];
 
@@ -159,6 +160,7 @@ export function figureSatisfied(figure: BingoFigure, marked: boolean[][]): boole
       return winsLetterColumn(marked, 4);
     case "PERIMETER":
       return winsPerimeter(marked);
+    case "JACKPOT":
     case "FULL_HOUSE":
       return winsFullHouse(marked);
     default:
@@ -192,7 +194,8 @@ function letterColumnSlots(col: number): { row: number; col: number }[] {
 
 export function figureHighlightSlots(figure: BingoFigure, marked: boolean[][]): { row: number; col: number }[] {
   switch (figure) {
-    case "FULL_HOUSE": {
+    case "FULL_HOUSE":
+    case "JACKPOT": {
       const out: { row: number; col: number }[] = [];
       for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) out.push({ row: r, col: c });
       return out;

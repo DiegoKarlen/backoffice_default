@@ -2,6 +2,7 @@ import type { EvaluateAfterBallParams, PrizeAwardBroadcastPayload } from "../typ
 import { computeDeferredWinsAfterBall } from "./prize-evaluation.logic.js";
 import {
   insertDeferredRoundPrizeWin,
+  loadBingoJackpotMaxBall,
   loadBingoPrizes,
   loadRoundAwardState,
   loadRoundCards,
@@ -12,6 +13,7 @@ export { computeDeferredWinsAfterBall } from "./prize-evaluation.logic.js";
 export type { DeferredWinCandidate } from "./prize-evaluation.logic.js";
 export {
   cardPrizeKey,
+  loadBingoJackpotMaxBall,
   loadBingoPrizes,
   loadRoundAwardState,
   loadRoundCards,
@@ -28,7 +30,7 @@ export {
  * - Figuras en `BINGO_FIGURE_EVAL_ORDER` (línea, doble línea, letras B-I-N-G-O, perímetro, cartón lleno).
  * - La wallet se acredita siempre al cerrar la partida (`settleDeferredSplitPrizesForRound`).
  * - `prizePayoutMode` solo define cómo liquidar al cierre: monto completo por ganador vs reparto del pozo.
- * - Por premio: si `uniquePerRound`, la figura se paga una sola vez por partida (primera bolilla en que alguien la cumple).
+ * - Por premio: cada figura se paga una sola vez por partida (primera bolilla en que alguien la cumple).
  * - Un mismo cartón puede ganar varias figuras a medida que avanza el sorteo.
  * - La partida termina cuando cualquier cartón completa cartón lleno (FULL_HOUSE).
  *
@@ -39,10 +41,11 @@ export async function evaluateRoundPrizesAfterBall(
 ): Promise<boolean> {
   const { bingoRoundId, bingoId, drawnNumbers } = params;
 
-  const [prizes, cards, awardState] = await Promise.all([
+  const [prizes, cards, awardState, jackpotMaxBall] = await Promise.all([
     loadBingoPrizes(bingoId),
     loadRoundCards(bingoRoundId),
     loadRoundAwardState(bingoRoundId),
+    loadBingoJackpotMaxBall(bingoId),
   ]);
 
   const { newWins, shouldEndRound } = computeDeferredWinsAfterBall({
@@ -50,6 +53,7 @@ export async function evaluateRoundPrizesAfterBall(
     cards,
     drawnNumbers,
     awardState,
+    jackpotMaxBall,
   });
 
   for (const win of newWins) {
