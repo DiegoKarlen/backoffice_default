@@ -193,7 +193,6 @@ export class BingoLiveSession implements LiveSchedulerHost {
     this.queue = [...ctx.ballQueue];
     this.drawn = [];
     this.phase = "drawing";
-    await this.refreshRoundPoolCents();
 
     this.broadcast("round_start", {
       bingoId: ctx.bingo.id,
@@ -205,6 +204,9 @@ export class BingoLiveSession implements LiveSchedulerHost {
       totalBalls: ballCountForType(ctx.bingo.bingoType),
       scheduledStartsAt: ctx.occ.startsAt,
     });
+    this.broadcast("state", this.getSnapshot());
+
+    await this.refreshRoundPoolCents();
     this.broadcast("state", this.getSnapshot());
 
     this.clearDrawTimer();

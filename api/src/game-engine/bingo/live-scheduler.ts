@@ -314,7 +314,6 @@ export class BingoLiveScheduler {
     }
 
     this.lastPlayedStartsAtMs = occ.startsAtMs;
-    this.nextKick = null;
 
     await this.host.startDrawingRound({
       occ: { startsAt: occ.startsAt, startsAtMs: occ.startsAtMs },
@@ -336,6 +335,7 @@ export class BingoLiveScheduler {
       ballQueue: row.drawMode === BingoDrawMode.VIRTUAL ? createBallQueue(row.bingoType) : [],
     });
 
+    this.nextKick = null;
     await this.refreshFollowingKick(occ.startsAtMs);
   }
 
