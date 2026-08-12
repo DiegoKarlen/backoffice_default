@@ -1360,7 +1360,6 @@ function applySnapshot(s: LiveSnapshot): void {
     clearBingoCloseHold();
     clearIdleFastPoll();
     clearTransitionWatch();
-    setRoundLiveMarkingClosed(false);
     roundOpeningHoldApply = true;
     applySnapshotInner(s);
     lastAppliedPhase = s.phase;
