@@ -1,4 +1,6 @@
 import { prisma } from "../lib/prisma.js";
+import { env } from "../config/env.js";
+import { logAdminAudit } from "../lib/admin-audit-log.js";
 import { applyWalletDelta, lockWalletForPlayer } from "./wallet-ledger.js";
 
 function buildManualDepositRef(adminUserId: string, note?: string | null): string {
@@ -27,6 +29,9 @@ export async function creditWalletManualDeposit(params: {
 
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw new Error("amountCents must be a positive integer");
+  }
+  if (amountCents > env.maxManualCreditCents) {
+    throw new Error(`amountCents exceeds maximum manual credit (${env.maxManualCreditCents})`);
   }
   if (amountCents > 1_000_000_000) {
     throw new Error("amountCents exceeds maximum allowed");
@@ -63,6 +68,17 @@ export async function creditWalletManualDeposit(params: {
         balanceAfterCents: newBalance,
         depositId: deposit.id,
       },
+    });
+
+    await logAdminAudit(tx, {
+      adminUserId,
+      action: "MANUAL_WALLET_CREDIT",
+      targetType: "player",
+      targetId: playerId,
+      amountCents,
+      note,
+      depositId: deposit.id,
+      metadata: { transactionId: wt.id, walletId: wallet.id },
     });
 
     return {

@@ -27,6 +27,7 @@ model User {
 
   bingosCreated Bingo[] @relation("BingoCreatedBy")
   bingosUpdated Bingo[] @relation("BingoUpdatedBy")
+  adminAuditLogs AdminAuditLog[]
 }
 
 model Role {
@@ -461,7 +462,32 @@ model PrizePayout {
 
   walletTransaction WalletTransaction?
 
+  @@unique([bingoPrizeId, playerRoundCardId])
   @@index([playerId, createdAt])
   @@index([bingoPrizeId])
   @@index([playerRoundCardId])
+}
+
+enum AdminAuditAction {
+  MANUAL_WALLET_CREDIT
+}
+
+/// Backoffice admin actions audit trail (manual credits, etc.).
+model AdminAuditLog {
+  id          String           @id @default(uuid())
+  adminUserId String
+  adminUser   User             @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  action      AdminAuditAction
+  /// Target entity type, e.g. `player`.
+  targetType  String
+  targetId    String
+  amountCents Int?
+  note        String?
+  depositId   String?
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@index([action, createdAt])
 }

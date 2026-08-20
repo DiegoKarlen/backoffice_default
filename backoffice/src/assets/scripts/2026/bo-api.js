@@ -1,9 +1,13 @@
 import { createApiClient } from "@shared/http-client.js";
-import { getApiBase, getToken } from "./bo-config.js";
+import { clearSession, getApiBase, getToken, redirectToSignIn } from "./bo-config.js";
 
 const { request: apiRequest } = createApiClient({
   baseUrl: getApiBase,
   getToken,
+  onUnauthorized: () => {
+    clearSession();
+    redirectToSignIn();
+  },
 });
 
 export async function loginRequest(body) {
@@ -38,10 +42,21 @@ export async function loginTotpRequest(body) {
 }
 
 async function apiJson(path, options = {}) {
-  return apiRequest(path, {
-    cache: "no-store",
-    ...options,
-  });
+  try {
+    return await apiRequest(path, {
+      cache: "no-store",
+      ...options,
+    });
+  } catch (e) {
+    if (e?.status === 403) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (err.message === "Forbidden" || !err.message) {
+        err.message = "No tenés permiso para realizar esta acción.";
+      }
+      throw err;
+    }
+    throw e;
+  }
 }
 
 export const api = {

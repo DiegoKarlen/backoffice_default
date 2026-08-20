@@ -89,11 +89,16 @@ if (initiated.status !== "PENDING") {
 console.log("   depositId:", initiated.depositId);
 
 console.log("4) Webhook stub (success=true)…");
+const webhookSecret = process.env.PAYMENTS_WEBHOOK_STUB_SECRET?.trim() || "dev-webhook-stub-secret";
 const wh1 = await jsonFetch<{ ok: boolean; status?: string; alreadyProcessed?: boolean }>(
   "/webhooks/payments/stub",
   {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-Webhook-Secret": webhookSecret,
+    },
     body: JSON.stringify({ depositId: initiated.depositId, success: true }),
   },
 );
@@ -115,7 +120,11 @@ if (balanceAfter !== balanceBefore + DEPOSIT_CENTS) {
 console.log("6) Webhook duplicado (idempotencia)…");
 const wh2 = await jsonFetch<{ ok: boolean; alreadyProcessed?: boolean }>("/webhooks/payments/stub", {
   method: "POST",
-  headers: { "Content-Type": "application/json", Accept: "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-Webhook-Secret": webhookSecret,
+  },
   body: JSON.stringify({ depositId: initiated.depositId, success: true }),
 });
 if (!wh2.ok || !wh2.alreadyProcessed) {

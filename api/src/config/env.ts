@@ -34,6 +34,9 @@ const envSchema = z.object({
   AUTH_LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900_000),
   UPCOMING_CACHE_TTL_MS: z.coerce.number().int().min(0).default(10_000),
   SSE_BALL_DELTA: boolFromEnv,
+  OPENAPI_ENABLED: boolFromEnv,
+  OPENAPI_SERVER_URL: z.string().url().optional(),
+  MAX_MANUAL_CREDIT_CENTS: z.coerce.number().int().min(1).default(10_000_000),
 });
 
 export type AppEnv = {
@@ -49,6 +52,12 @@ export type AppEnv = {
   upcomingCacheTtlMs: number;
   /** When true, emits lightweight `ball_delta` events in addition to `ball`. */
   sseBallDelta: boolean;
+  /** Serve Swagger UI at `/api/swagger` when true. */
+  openapiEnabled: boolean;
+  /** Base URL shown in OpenAPI `servers` (defaults to http://localhost:PORT). */
+  openapiServerUrl: string;
+  /** Maximum amount (cents) for a single manual wallet credit from backoffice. */
+  maxManualCreditCents: number;
 };
 
 function buildEnv(): AppEnv {
@@ -84,6 +93,10 @@ function buildEnv(): AppEnv {
     authLoginRateLimitWindowMs: e.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS,
     upcomingCacheTtlMs: e.UPCOMING_CACHE_TTL_MS,
     sseBallDelta: parseBool(e.SSE_BALL_DELTA, false),
+    openapiEnabled: parseBool(e.OPENAPI_ENABLED, e.NODE_ENV !== "production"),
+    openapiServerUrl:
+      e.OPENAPI_SERVER_URL?.replace(/\/$/, "") ?? `http://localhost:${e.PORT}`,
+    maxManualCreditCents: e.MAX_MANUAL_CREDIT_CENTS,
   };
 }
 

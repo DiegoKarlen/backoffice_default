@@ -51,6 +51,11 @@ export async function settleDeferredSplitPrizesForRound(params: {
   const settled: SettledPrizeCredit[] = [];
 
   await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `SELECT id FROM "DeferredRoundPrizeWin" WHERE "bingoRoundId" = $1 FOR UPDATE`,
+      params.bingoRoundId,
+    );
+
     const wins = await tx.deferredRoundPrizeWin.findMany({
       where: {
         bingoRoundId: params.bingoRoundId,

@@ -23,12 +23,15 @@ import { buildUpcomingPayload } from "../lib/bingo-upcoming.js";
 import { httpError, rethrowBingoMutationError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
 import { type AuthedRequest, requireAuth } from "../middleware/auth.js";
+import { requireFunctionality } from "../middleware/require-functionality.js";
+import { BO } from "../lib/functionality-codes.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 import { attachBingoLiveBackofficeRoutes } from "./bingo-live-backoffice.js";
 import { attachBingoRoundRoutes } from "./bingo-rounds.js";
 
 export const bingosRouter = Router();
 bingosRouter.use(requireAuth);
+bingosRouter.use(requireFunctionality(BO.BINGO_MANAGE));
 
 bingosRouter.get(
   "/upcoming",

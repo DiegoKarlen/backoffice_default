@@ -24,5 +24,10 @@ export function listRegisteredProviderIds(): PaymentsProviderId[] {
 
 /** Proveedores que aceptan webhook (no requieren OAuth para recibir notificaciones). */
 export function listWebhookProviderIds(): PaymentsProviderId[] {
-  return ["stub", "mixer-gaming"];
+  const ids: PaymentsProviderId[] = [];
+  if (paymentsEnv.webhookStubEnabled && !paymentsEnv.isProduction) {
+    ids.push("stub");
+  }
+  ids.push("mixer-gaming");
+  return ids;
 }

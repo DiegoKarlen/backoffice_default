@@ -1,9 +1,15 @@
 import { Router } from "express";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { httpError } from "../../lib/route-helpers.js";
-import { logError } from "../../lib/logger.js";
+import { logError, logInfo } from "../../lib/logger.js";
+import type { TrafficLoggedRequest } from "../../lib/http-traffic-log.js";
 import type { PaymentsProviderId } from "../config.js";
 import { isPaymentsEnabled } from "../config.js";
+import {
+  paymentWebhookRateLimiter,
+  verifyPaymentWebhookPost,
+} from "../middleware/verify-webhook.js";
+import { paymentWebhookTrafficLogger } from "../middleware/payment-traffic-log.js";
 import { handlePaymentProviderWebhook } from "../deposit.service.js";
 import { listWebhookProviderIds } from "../providers/registry.js";
 
@@ -31,14 +37,18 @@ export function createPaymentWebhooksRouter(): Router {
         ok: true,
         providerId,
         method: "POST",
-        hint: "MixerGaming sends POST with JSON body (success, transaction).",
+        hint: "Send POST with JSON body. Mixer requires header X-Signature (HMAC-SHA256). Stub (dev) uses X-Webhook-Secret.",
       });
     }),
   );
 
   router.post(
     "/:providerId",
+    paymentWebhookRateLimiter,
+    paymentWebhookTrafficLogger,
+    verifyPaymentWebhookPost,
     asyncHandler(async (req, res) => {
+      const trafficReq = req as TrafficLoggedRequest;
       if (!isPaymentsEnabled()) {
         throw httpError(503, "Payments module is disabled");
       }
@@ -53,9 +63,21 @@ export function createPaymentWebhooksRouter(): Router {
       }
 
       try {
+        logInfo("payments-webhook", "processing started", {
+          providerId,
+          requestId: trafficReq.trafficLogId,
+        });
+
         const result = await handlePaymentProviderWebhook(providerId, {
           rawBody: req.body,
           headers: headerRecord(req),
+          requestId: trafficReq.trafficLogId,
+        });
+
+        logInfo("payments-webhook", "processing finished", {
+          providerId,
+          requestId: trafficReq.trafficLogId,
+          result,
         });
 
         if (!result.ok && result.reason === "deposit_not_found") {

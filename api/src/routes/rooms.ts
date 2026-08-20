@@ -4,11 +4,14 @@ import { RoomStatus } from "@prisma/client";
 import { ensureLiveSessionForRoom } from "../game-engine/bingo/live-session.js";
 import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
+import { BO } from "../lib/functionality-codes.js";
 import { type AuthedRequest, requireAuth } from "../middleware/auth.js";
+import { requireFunctionality } from "../middleware/require-functionality.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 
 export const roomsRouter = Router();
 roomsRouter.use(requireAuth);
+roomsRouter.use(requireFunctionality(BO.ROOM_MANAGE));
 
 const slugSchema = z
   .string()

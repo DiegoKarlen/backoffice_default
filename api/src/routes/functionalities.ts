@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
+import { BO } from "../lib/functionality-codes.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { requireAnyFunctionality, requireFunctionality } from "../middleware/require-functionality.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 
 export const functionalitiesRouter = Router();
@@ -10,6 +12,7 @@ functionalitiesRouter.use(requireAuth);
 
 functionalitiesRouter.get(
   "/",
+  requireAnyFunctionality(BO.FUNCTIONALITIES_MANAGE, BO.ROLES_MANAGE, BO.USERS_MANAGE),
   asyncHandler(async (_req: AuthedRequest, res) => {
     const list = await prisma.functionality.findMany({
       orderBy: [{ module: "asc" }, { code: "asc" }],
@@ -27,6 +30,7 @@ const createFunctionalitySchema = z.object({
 
 functionalitiesRouter.post(
   "/",
+  requireFunctionality(BO.FUNCTIONALITIES_MANAGE),
   asyncHandler(async (req: AuthedRequest, res) => {
     const parsed = createFunctionalitySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -49,6 +53,7 @@ const patchFunctionalitySchema = z.object({
 
 functionalitiesRouter.patch(
   "/:id",
+  requireFunctionality(BO.FUNCTIONALITIES_MANAGE),
   asyncHandler(async (req: AuthedRequest, res) => {
     const { id } = req.params;
     const parsed = patchFunctionalitySchema.safeParse(req.body);

@@ -418,7 +418,7 @@
                 "value": "Bearer {{playerToken}}"
               }
             ],
-            "url": "{{apiBase}}/player/deposits/{{depositId}}"
+            "url": "{{apiBase}}/s/{{depositId}}"
           }
         },
         {

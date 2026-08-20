@@ -3,12 +3,20 @@ import { z } from "zod";
 import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword } from "../lib/password.js";
+import { BO } from "../lib/functionality-codes.js";
+import {
+  assertActorCanAssignRoles,
+  assertActorCanModifyUser,
+  assertCanDeactivateUser,
+} from "../lib/user-role-guards.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { getBackofficeUser, requireFunctionality, type AuthedBackofficeRequest } from "../middleware/require-functionality.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 
 export const usersRouter = Router();
 
 usersRouter.use(requireAuth);
+usersRouter.use(requireFunctionality(BO.USERS_MANAGE));
 
 usersRouter.get(
   "/",
@@ -42,12 +50,16 @@ const createUserSchema = z.object({
 
 usersRouter.post(
   "/",
-  asyncHandler(async (req: AuthedRequest, res) => {
+  asyncHandler(async (req: AuthedBackofficeRequest, res) => {
     const parsed = createUserSchema.safeParse(req.body);
     if (!parsed.success) {
       throw zodFlattenError(parsed.error);
     }
     const { email, password, displayName, active, roleIds } = parsed.data;
+    const actor = getBackofficeUser(req);
+    if (roleIds?.length) {
+      await assertActorCanAssignRoles(actor, roleIds);
+    }
 
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) {
@@ -95,7 +107,7 @@ const patchUserSchema = z.object({
 
 usersRouter.patch(
   "/:id",
-  asyncHandler(async (req: AuthedRequest, res) => {
+  asyncHandler(async (req: AuthedBackofficeRequest, res) => {
     const { id } = req.params;
     const parsed = patchUserSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -108,6 +120,12 @@ usersRouter.patch(
     }
 
     const { displayName, active, password, roleIds } = parsed.data;
+    const actor = getBackofficeUser(req);
+    await assertActorCanModifyUser(actor, id);
+    await assertCanDeactivateUser(id, active);
+    if (roleIds) {
+      await assertActorCanAssignRoles(actor, roleIds);
+    }
     const data: {
       displayName?: string | null;
       active?: boolean;
