@@ -9,10 +9,13 @@ import { creditPrizeToWinner } from "../services/prize-payout.js";
 import { listWalletTransactionsForPlayer } from "../lib/wallet-transactions-for-player.js";
 import { getWalletTransactionCardDetail } from "../lib/wallet-transaction-card-detail.js";
 import { getPlayerDepositAudit } from "../payments/deposit.service.js";
+import { BO } from "../lib/functionality-codes.js";
+import { requireFunctionality } from "../middleware/require-functionality.js";
 
 export const playersRouter = Router();
 
 playersRouter.use(requireAuth);
+playersRouter.use(requireFunctionality(BO.PLAYERS_MANAGE));
 
 const listQuerySchema = z.object({
   q: z.string().optional(),

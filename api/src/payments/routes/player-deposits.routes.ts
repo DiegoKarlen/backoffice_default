@@ -4,6 +4,7 @@ import { z } from "zod";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requirePlayer, type AuthedRequest } from "../../middleware/auth.js";
 import { httpError, zodFlattenError } from "../../lib/route-helpers.js";
+import { playerDepositTrafficLogger } from "../middleware/payment-traffic-log.js";
 import { paymentsEnv, isPaymentsEnabled } from "../config.js";
 import {
   DepositProfileIncompleteError,
@@ -67,6 +68,7 @@ export function createPlayerDepositsRouter(): Router {
     "/",
     requirePlayer,
     depositRateLimiter,
+    playerDepositTrafficLogger,
     asyncHandler(async (req, res) => {
       ensurePaymentsEnabled();
       const parsed = initiateSchema.safeParse(req.body);

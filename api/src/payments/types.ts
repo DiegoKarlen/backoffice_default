@@ -87,6 +87,8 @@ export type ListMethodsContext = {
 export type WebhookParseContext = {
   rawBody: unknown;
   headers: Record<string, string | string[] | undefined>;
+  /** Correlates all log lines for one HTTP webhook request. */
+  requestId?: string;
 };
 
 /** Evento normalizado tras parsear el webhook del proveedor. */

@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../middleware/async-handler.js";
 import { requireAuth } from "../middleware/auth.js";
+import { requireFunctionality } from "../middleware/require-functionality.js";
+import { BO } from "../lib/functionality-codes.js";
 import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import {
   listBackofficePaymentMethods,
@@ -10,6 +12,7 @@ import {
 
 export const paymentMethodsRouter = Router();
 paymentMethodsRouter.use(requireAuth);
+paymentMethodsRouter.use(requireFunctionality(BO.PAYMENTS_MANAGE));
 
 const patchSchema = z.object({
   active: z.boolean(),

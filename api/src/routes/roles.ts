@@ -2,7 +2,15 @@ import { Router } from "express";
 import { z } from "zod";
 import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
+import { BO } from "../lib/functionality-codes.js";
+import { assertActorCanAssignRoleFunctionalities } from "../lib/user-role-guards.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import {
+  getBackofficeUser,
+  requireAnyFunctionality,
+  requireFunctionality,
+  type AuthedBackofficeRequest,
+} from "../middleware/require-functionality.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 
 export const rolesRouter = Router();
@@ -10,6 +18,7 @@ rolesRouter.use(requireAuth);
 
 rolesRouter.get(
   "/",
+  requireAnyFunctionality(BO.ROLES_MANAGE, BO.USERS_MANAGE),
   asyncHandler(async (_req: AuthedRequest, res) => {
     const list = await prisma.role.findMany({
       orderBy: { name: "asc" },
@@ -40,12 +49,17 @@ const createRoleSchema = z.object({
 
 rolesRouter.post(
   "/",
-  asyncHandler(async (req: AuthedRequest, res) => {
+  requireFunctionality(BO.ROLES_MANAGE),
+  asyncHandler(async (req: AuthedBackofficeRequest, res) => {
     const parsed = createRoleSchema.safeParse(req.body);
     if (!parsed.success) {
       throw zodFlattenError(parsed.error);
     }
     const { code, name, description, functionalityIds } = parsed.data;
+    const actor = getBackofficeUser(req);
+    if (functionalityIds?.length) {
+      await assertActorCanAssignRoleFunctionalities(actor, functionalityIds);
+    }
 
     const role = await prisma.$transaction(async (tx) => {
       const r = await tx.role.create({
@@ -79,7 +93,8 @@ const patchRoleSchema = z.object({
 
 rolesRouter.patch(
   "/:id",
-  asyncHandler(async (req: AuthedRequest, res) => {
+  requireFunctionality(BO.ROLES_MANAGE),
+  asyncHandler(async (req: AuthedBackofficeRequest, res) => {
     const { id } = req.params;
     const parsed = patchRoleSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -92,6 +107,10 @@ rolesRouter.patch(
     }
 
     const { name, description, functionalityIds } = parsed.data;
+    const actor = getBackofficeUser(req);
+    if (functionalityIds) {
+      await assertActorCanAssignRoleFunctionalities(actor, functionalityIds);
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.role.update({

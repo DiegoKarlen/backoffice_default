@@ -67,6 +67,8 @@ const SUITES: Record<string, { pattern: string; label: string }> = {
   integration: { pattern: "tests/integration/**/*.integration.test.ts", label: "Integration (database)" },
   engine: { pattern: "tests/unit/game-engine/**/*.unit.test.ts", label: "Game engine unit" },
   lib: { pattern: "tests/unit/lib/**/*.unit.test.ts", label: "Lib unit" },
+  security: { pattern: "tests/unit/middleware/**/*.unit.test.ts", label: "Security / middleware unit" },
+  payments: { pattern: "tests/unit/payments/**/*.unit.test.ts", label: "Payments unit" },
   prizes: { pattern: "tests/integration/prizes/**/*.integration.test.ts", label: "Prize scenarios" },
   wallet: { pattern: "tests/integration/wallet/**/*.integration.test.ts", label: "Wallet / purchase scenarios" },
 };

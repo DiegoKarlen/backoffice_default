@@ -29,6 +29,17 @@ Copy `.env.example` to `api/.env`. Required: `DATABASE_URL`, `JWT_SECRET` (min 1
 | `AUTH_LOGIN_RATE_LIMIT_*` | Login brute-force limits |
 | `UPCOMING_CACHE_TTL_MS` | Cache TTL for `/public/bingos/upcoming` (0 = off, default 10000) |
 | `SSE_BALL_DELTA` | `1` / `true` emits extra `ball_delta` SSE events (clients may ignore; default off) |
+| `OPENAPI_ENABLED` | `1` / `true` serves Swagger UI at `/api/swagger` (default on when `NODE_ENV` ≠ `production`) |
+| `OPENAPI_SERVER_URL` | Base URL in OpenAPI spec (default `http://localhost:PORT`) |
+
+### API documentation (Swagger)
+
+With the API running in dev:
+
+- **Swagger UI:** http://localhost:4001/api/swagger
+- **OpenAPI JSON:** http://localhost:4001/api/swagger/openapi.json
+
+Use **Authorize** with a JWT from `POST /auth/login` (backoffice) or `POST /player/login` (player).
 
 Live ball marking uses authenticated `POST /backoffice/bingos/live/draw-ball` from the backoffice home page.
 

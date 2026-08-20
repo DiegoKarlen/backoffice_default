@@ -1,5 +1,6 @@
 import type { Player, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { logInfo } from "../lib/logger.js";
 import { applyWalletDelta, lockWalletForPlayer } from "../services/wallet-ledger.js";
 import { paymentsEnv, type PaymentsProviderId } from "./config.js";
 import { extractInitiateMessage, serializeDeposit } from "./deposit.serializer.js";
@@ -19,6 +20,13 @@ import type {
   WebhookHandleResult,
   WebhookParseContext,
 } from "./types.js";
+
+function webhookLogContext(
+  requestId: string | undefined,
+  fields: Record<string, unknown>,
+): Record<string, unknown> {
+  return requestId ? { requestId, ...fields } : fields;
+}
 
 export class DepositProfileIncompleteError extends Error {
   readonly missingFields: string[];
@@ -396,10 +404,16 @@ export async function completeDeposit(
 export async function applyWebhookDepositEvent(
   providerId: PaymentsProviderId,
   event: WebhookDepositEvent,
+  requestId?: string,
 ): Promise<WebhookHandleResult> {
   return prisma.$transaction(async (tx) => {
     const deposit = await lockDepositByProviderRef(tx, providerId, event.externalRef);
     if (!deposit) {
+      logInfo(
+        "payments-webhook-process",
+        "deposit not found",
+        webhookLogContext(requestId, { providerId, externalRef: event.externalRef }),
+      );
       return { ok: false, reason: "deposit_not_found" };
     }
 
@@ -410,6 +424,15 @@ export async function applyWebhookDepositEvent(
         status: "COMPLETED",
         alreadyProcessed: true,
       };
+      logInfo(
+        "payments-webhook-process",
+        "deposit already completed (idempotent)",
+        webhookLogContext(requestId, {
+          providerId,
+          depositId: deposit.id,
+          externalRef: event.externalRef,
+        }),
+      );
       await persistWebhookAudit(tx, deposit.id, event, result);
       return result;
     }
@@ -420,6 +443,15 @@ export async function applyWebhookDepositEvent(
         status: "FAILED",
         reason: "deposit_already_failed",
       };
+      logInfo(
+        "payments-webhook-process",
+        "deposit already failed",
+        webhookLogContext(requestId, {
+          providerId,
+          depositId: deposit.id,
+          externalRef: event.externalRef,
+        }),
+      );
       await persistWebhookAudit(tx, deposit.id, event, result);
       return result;
     }
@@ -444,6 +476,17 @@ export async function applyWebhookDepositEvent(
           ...webhookAuditData(event, result),
         },
       });
+      logInfo(
+        "payments-webhook-process",
+        "deposit failed (amount mismatch)",
+        webhookLogContext(requestId, {
+          providerId,
+          depositId: deposit.id,
+          externalRef: event.externalRef,
+          expectedCents: deposit.amountCents,
+          receivedCents: event.amountCents,
+        }),
+      );
       return result;
     }
 
@@ -457,6 +500,16 @@ export async function applyWebhookDepositEvent(
           ...webhookAuditData(event, result),
         },
       });
+      logInfo(
+        "payments-webhook-process",
+        "deposit failed (provider reported failure)",
+        webhookLogContext(requestId, {
+          providerId,
+          depositId: deposit.id,
+          externalRef: event.externalRef,
+          failedReason: event.failedReason,
+        }),
+      );
       return result;
     }
 
@@ -484,6 +537,19 @@ export async function applyWebhookDepositEvent(
       },
     });
 
+    logInfo(
+      "payments-webhook-process",
+      "deposit completed and wallet credited",
+      webhookLogContext(requestId, {
+        providerId,
+        depositId: deposit.id,
+        externalRef: event.externalRef,
+        playerId: deposit.playerId,
+        amountCents: deposit.amountCents,
+        balanceAfterCents: newBalanceCents,
+      }),
+    );
+
     return result;
   });
 }
@@ -498,5 +564,27 @@ export async function handlePaymentProviderWebhook(
   }
 
   const event = provider.parseWebhook(ctx);
-  return applyWebhookDepositEvent(providerId, event);
+  logInfo(
+    "payments-webhook-process",
+    "webhook parsed",
+    webhookLogContext(ctx.requestId, {
+      providerId,
+      externalRef: event.externalRef,
+      success: event.success,
+      amountCents: event.amountCents,
+    }),
+  );
+
+  const result = await applyWebhookDepositEvent(providerId, event, ctx.requestId);
+  logInfo(
+    "payments-webhook-process",
+    "webhook applied",
+    webhookLogContext(ctx.requestId, {
+      providerId,
+      externalRef: event.externalRef,
+      depositId: result.depositId,
+      result,
+    }),
+  );
+  return result;
 }

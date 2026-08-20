@@ -39,9 +39,13 @@ export function rethrowPlayerWalletError(e: unknown): never {
   if (
     msg === PLAYER_INACTIVE ||
     msg.includes("does not belong") ||
-    msg.includes("does not match")
+    msg.includes("does not match") ||
+    msg === "Prize already credited for this card"
   ) {
     throw httpError(409, msg);
+  }
+  if (msg === "Prize win not registered by game engine") {
+    throw httpError(404, msg);
   }
   if (
     msg.includes("amountCents") ||
