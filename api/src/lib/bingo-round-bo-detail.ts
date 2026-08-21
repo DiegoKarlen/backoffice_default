@@ -45,6 +45,7 @@ export async function getRoundPurchasedCardsForBo(params: {
       bingoType: BingoType;
       roundSequence: number;
       roundStatus: BingoRoundStatus;
+      cardsHiddenDuringLiveDraw: boolean;
       cards: Array<{
         playerUsername: string;
         cardIndex: number;
