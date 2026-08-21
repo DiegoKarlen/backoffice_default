@@ -69,9 +69,14 @@ export const components: OpenAPIV3.ComponentsObject = {
       description: "Crédito manual al wallet de un jugador desde el backoffice.",
       properties: {
         amountCents: { type: "integer", minimum: 1, description: "Monto en centavos." },
+        idempotencyKey: {
+          type: "string",
+          format: "uuid",
+          description: "Clave única por operación; reintentos con la misma clave no duplican el crédito.",
+        },
         note: { type: "string", maxLength: 500, description: "Nota interna opcional." },
       },
-      required: ["amountCents"],
+      required: ["amountCents", "idempotencyKey"],
     },
     DrawBallRequest: {
       type: "object",
@@ -105,7 +110,7 @@ export const components: OpenAPIV3.ComponentsObject = {
       properties: {
         amountCents: { type: "integer", minimum: 1 },
         paymentMethodId: { type: "string", format: "uuid" },
-        providerId: { type: "string", enum: ["stub", "mixer-gaming"] },
+        providerId: { type: "string", enum: ["mixer-gaming"] },
         profile: {
           type: "object",
           description: "Datos de perfil requeridos por el PSP si aún no están completos.",

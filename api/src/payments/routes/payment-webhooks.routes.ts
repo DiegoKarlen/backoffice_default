@@ -14,7 +14,7 @@ import { handlePaymentProviderWebhook } from "../deposit.service.js";
 import { listWebhookProviderIds } from "../providers/registry.js";
 
 function normalizeProviderId(raw: string): PaymentsProviderId | null {
-  if (raw === "stub" || raw === "mixer-gaming") return raw;
+  if (raw === "mixer-gaming") return raw;
   return null;
 }
 
@@ -37,7 +37,7 @@ export function createPaymentWebhooksRouter(): Router {
         ok: true,
         providerId,
         method: "POST",
-        hint: "Send POST with JSON body. Mixer requires header X-Signature (HMAC-SHA256). Stub (dev) uses X-Webhook-Secret.",
+        hint: "Send POST with JSON body. Mixer requires header X-Signature (HMAC-SHA256).",
       });
     }),
   );

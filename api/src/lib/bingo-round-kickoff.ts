@@ -1,6 +1,24 @@
-import { BingoRoundStatus } from "@prisma/client";
+import { BingoRoundStatus, type Prisma } from "@prisma/client";
 import { BingoRoundCancelReason, type BingoRoundCancelReasonCode } from "./bingo-round-cancellation.js";
 import { prisma } from "./prisma.js";
+
+/** Locks the round row (`FOR UPDATE`) so purchase and kickoff cannot race on status. */
+export async function lockBingoRoundForPurchase(
+  tx: Prisma.TransactionClient,
+  bingoRoundId: string,
+): Promise<
+  Prisma.BingoRoundGetPayload<{
+    include: { bingo: true };
+  }>
+> {
+  await tx.$executeRawUnsafe(`SELECT id FROM "BingoRound" WHERE id = $1 FOR UPDATE`, bingoRoundId);
+  const round = await tx.bingoRound.findUnique({
+    where: { id: bingoRoundId },
+    include: { bingo: true },
+  });
+  if (!round) throw new Error("Round not found");
+  return round;
+}
 
 /** Venta abierta solo mientras la partida está programada y no llegó `startsAt`. */
 export function isRoundOpenForPurchase(

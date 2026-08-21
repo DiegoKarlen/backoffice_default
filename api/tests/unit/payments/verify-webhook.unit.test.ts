@@ -2,24 +2,39 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Request } from "express";
 import { paymentsEnv } from "../../../src/payments/config.js";
+import { assertMixerWebhookAuthorized } from "../../../src/payments/middleware/verify-webhook.js";
 import {
-  assertStubWebhookAuthorized,
-  WEBHOOK_SECRET_HEADER,
-} from "../../../src/payments/middleware/verify-webhook.js";
+  MIXER_WEBHOOK_SIGNATURE_HEADER,
+  mixerWebhookSignatureFromBody,
+} from "../../../src/payments/providers/mixer-gaming/webhook-signature.js";
 
-function mockReq(secret?: string): Request {
+function mockReq(body: unknown, signature?: string): Request {
   return {
     ip: "127.0.0.1",
-    originalUrl: "/webhooks/payments/stub",
-    headers: secret ? { [WEBHOOK_SECRET_HEADER]: secret } : {},
+    originalUrl: "/webhooks/payments/mixer-gaming",
+    body,
+    headers: signature ? { [MIXER_WEBHOOK_SIGNATURE_HEADER]: signature } : {},
   } as Request;
 }
 
+const sampleBody = {
+  success: true,
+  status: "approved",
+  transaction: {
+    id: 12345,
+    user_id: "1",
+    currency: "ARS",
+    transaction_type: 1,
+    amount: "100.00",
+    status: "approved",
+  },
+};
+
 describe("[unit] verify-webhook", () => {
-  it("rejects stub webhook without secret", () => {
-    if (!paymentsEnv.webhookStubEnabled) return;
+  it("rejects mixer webhook without X-Signature", () => {
+    if (!paymentsEnv.webhookMixerSecret) return;
     assert.throws(
-      () => assertStubWebhookAuthorized(mockReq()),
+      () => assertMixerWebhookAuthorized(mockReq(sampleBody)),
       (err: unknown) => {
         assert.ok(err instanceof Error);
         assert.equal((err as Error & { status?: number }).status, 401);
@@ -28,15 +43,16 @@ describe("[unit] verify-webhook", () => {
     );
   });
 
-  it("accepts stub webhook with valid secret", () => {
-    if (!paymentsEnv.webhookStubEnabled || !paymentsEnv.webhookStubSecret) return;
-    assert.doesNotThrow(() =>
-      assertStubWebhookAuthorized(mockReq(paymentsEnv.webhookStubSecret)),
-    );
+  it("accepts mixer webhook with valid X-Signature", () => {
+    const secret = paymentsEnv.webhookMixerSecret;
+    if (!secret) return;
+    const signature = mixerWebhookSignatureFromBody(sampleBody, secret);
+    assert.ok(signature);
+    assert.doesNotThrow(() => assertMixerWebhookAuthorized(mockReq(sampleBody, signature!)));
   });
 
-  it("rejects stub webhook with wrong secret", () => {
-    if (!paymentsEnv.webhookStubEnabled) return;
-    assert.throws(() => assertStubWebhookAuthorized(mockReq("wrong-secret")));
+  it("rejects mixer webhook with wrong X-Signature", () => {
+    if (!paymentsEnv.webhookMixerSecret) return;
+    assert.throws(() => assertMixerWebhookAuthorized(mockReq(sampleBody, "deadbeef".repeat(8))));
   });
 });

@@ -15,7 +15,7 @@ export type ProductionStartupOptions = {
 
 /**
  * Fail-fast checks before serving traffic in production.
- * WEBHOOK_STUB in prod is validated in `payments/config.ts` at module load.
+ * Payment provider env is validated in `payments/config.ts` at module load.
  */
 export function assertProductionStartupConfig(options: ProductionStartupOptions = {}): void {
   const nodeEnv = (options.nodeEnv ?? process.env.NODE_ENV ?? "development").trim();

@@ -1,5 +1,7 @@
 # Checklist QA manual — Seguridad (Fases 2, 3 y 4)
 
+> **Suite completa (Fase 1 game + Fase 2 remediación + este checklist):** ver [`manual-qa-full-suite.md`](./manual-qa-full-suite.md)
+
 Marcá cada ítem con `[x]` cuando lo completes. Anotá request/response si algo falla.
 
 **Proveedor de pagos en QA:** `mixer-gaming` únicamente.
@@ -224,11 +226,23 @@ Prisma → **WalletTransaction** → filtrar `depositId = <DEPOSIT_ID>` y `type 
 | Login | `POST /auth/login` → admin → `ADMIN_TOKEN` |
 | Método | `POST /backoffice/players/{playerId}/wallet/manual-credits` |
 | Authorize | `ADMIN_TOKEN` |
-| Body | `{ "amountCents": 5000, "note": "QA manual" }` |
+| Body | `{ "amountCents": 5000, "note": "QA manual", "idempotencyKey": "<uuid-v4>" }` |
 
 **Esperado:** HTTP **201** — respuesta con `depositId`, `transactionId`, `balanceCents`
 
 **Resultado real:** 201 — `depositId=8865dc63-e4e3-478f-8496-7cdac4606e79`, `balanceCents=3014500` ✅ (2026-08-20)
+
+---
+
+### Test 7b — Manual credits: replay idempotente → 200
+
+- [ ] **Hecho**
+
+Repetir **exactamente** el POST del Test 7 (mismo `idempotencyKey`, monto y jugador).
+
+**Esperado:** HTTP **200** — `{ "alreadyProcessed": true }`; saldo sin segundo crédito; 1 solo `Deposit`.
+
+**Resultado real:** _________________
 
 ---
 

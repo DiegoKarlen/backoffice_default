@@ -6,6 +6,7 @@ export const BO = {
   BINGO_MANAGE: "bo.bingo.manage",
   ROOM_MANAGE: "bo.room.manage",
   PLAYERS_MANAGE: "bo.players.manage",
+  WALLET_MANUAL_CREDIT: "bo.wallet.manual-credit",
   PAYMENTS_MANAGE: "bo.payments.manage",
 } as const;
 

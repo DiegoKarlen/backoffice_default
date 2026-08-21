@@ -456,38 +456,65 @@ export async function applyWebhookDepositEvent(
       return result;
     }
 
-    if (
-      event.amountCents !== undefined &&
-      event.amountCents > 0 &&
-      event.amountCents !== deposit.amountCents
-    ) {
-      const reason = `Amount mismatch: expected ${deposit.amountCents}, got ${event.amountCents}`;
-      const result: WebhookHandleResult = {
-        ok: true,
-        depositId: deposit.id,
-        status: "FAILED",
-        reason: "amount_mismatch",
-      };
-      await tx.deposit.update({
-        where: { id: deposit.id },
-        data: {
-          status: "FAILED",
-          failedReason: reason,
-          ...webhookAuditData(event, result),
-        },
-      });
-      logInfo(
-        "payments-webhook-process",
-        "deposit failed (amount mismatch)",
-        webhookLogContext(requestId, {
-          providerId,
+    if (event.success) {
+      if (event.amountCents === undefined || event.amountCents <= 0) {
+        const reason = `Invalid webhook amount: ${event.amountCents ?? "missing"}`;
+        const result: WebhookHandleResult = {
+          ok: true,
           depositId: deposit.id,
-          externalRef: event.externalRef,
-          expectedCents: deposit.amountCents,
-          receivedCents: event.amountCents,
-        }),
-      );
-      return result;
+          status: "FAILED",
+          reason: "invalid_webhook_amount",
+        };
+        await tx.deposit.update({
+          where: { id: deposit.id },
+          data: {
+            status: "FAILED",
+            failedReason: reason,
+            ...webhookAuditData(event, result),
+          },
+        });
+        logInfo(
+          "payments-webhook-process",
+          "deposit failed (invalid webhook amount)",
+          webhookLogContext(requestId, {
+            providerId,
+            depositId: deposit.id,
+            externalRef: event.externalRef,
+            receivedCents: event.amountCents,
+          }),
+        );
+        return result;
+      }
+
+      if (event.amountCents !== deposit.amountCents) {
+        const reason = `Amount mismatch: expected ${deposit.amountCents}, got ${event.amountCents}`;
+        const result: WebhookHandleResult = {
+          ok: true,
+          depositId: deposit.id,
+          status: "FAILED",
+          reason: "amount_mismatch",
+        };
+        await tx.deposit.update({
+          where: { id: deposit.id },
+          data: {
+            status: "FAILED",
+            failedReason: reason,
+            ...webhookAuditData(event, result),
+          },
+        });
+        logInfo(
+          "payments-webhook-process",
+          "deposit failed (amount mismatch)",
+          webhookLogContext(requestId, {
+            providerId,
+            depositId: deposit.id,
+            externalRef: event.externalRef,
+            expectedCents: deposit.amountCents,
+            receivedCents: event.amountCents,
+          }),
+        );
+        return result;
+      }
     }
 
     if (!event.success) {

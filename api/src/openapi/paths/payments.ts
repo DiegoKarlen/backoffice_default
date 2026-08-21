@@ -6,8 +6,8 @@ const providerPath: OpenAPIV3.ParameterObject = {
   name: "providerId",
   in: "path",
   required: true,
-  schema: { type: "string", enum: ["stub", "mixer-gaming"] },
-  description: "Identificador del proveedor de pagos (`stub` para pruebas, `mixer-gaming` en sandbox).",
+  schema: { type: "string", enum: ["mixer-gaming"] },
+  description: "Identificador del proveedor de pagos (`mixer-gaming` en sandbox/producción).",
 };
 
 export const paymentsPaths: OpenAPIV3.PathsObject = {
@@ -74,8 +74,7 @@ export const paymentsPaths: OpenAPIV3.PathsObject = {
         "**Mixer (`providerId=mixer-gaming`):** header obligatorio `X-Signature` — HMAC-SHA256 hex (minúsculas) sobre " +
         "`{transaction.id}_{transaction.amount}_{transaction.currency}_{transaction.user_id}`" +
         " (wiki Mixer §3.5). Secret en servidor: `PAYMENTS_MIXER_GAMING_WEBHOOK_SECRET`.\n\n" +
-        "Calcular firma para pruebas: `npx tsx scripts/sign-mixer-webhook.ts`.\n\n" +
-        "_Proveedor `stub` (solo dev/local): usa `X-Webhook-Secret` — no documentado aquí; deshabilitado en producción._",
+        "Calcular firma para pruebas: `npx tsx scripts/sign-mixer-webhook.ts`.",
       parameters: [
         providerPath,
         {

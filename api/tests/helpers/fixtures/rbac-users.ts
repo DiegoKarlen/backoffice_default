@@ -30,6 +30,11 @@ export async function createRbacFixture(suffix: string): Promise<RbacFixture> {
   const fUsers = await ensureFunctionality(BO.USERS_MANAGE, "Manage users", "admin");
   const fBingo = await ensureFunctionality(BO.BINGO_MANAGE, "Manage bingos", "game");
   const fPlayers = await ensureFunctionality(BO.PLAYERS_MANAGE, "Manage players", "game");
+  const fWalletManual = await ensureFunctionality(
+    BO.WALLET_MANUAL_CREDIT,
+    "Manual wallet credits",
+    "game",
+  );
   const fRoles = await ensureFunctionality(BO.ROLES_MANAGE, "Manage roles", "admin");
   const fFunc = await ensureFunctionality(BO.FUNCTIONALITIES_MANAGE, "Manage funcs", "admin");
   const fRoom = await ensureFunctionality(BO.ROOM_MANAGE, "Manage rooms", "game");
@@ -50,10 +55,16 @@ export async function createRbacFixture(suffix: string): Promise<RbacFixture> {
             { functionalityId: fRoom.id },
             { functionalityId: fPlayers.id },
             { functionalityId: fPayments.id },
+            { functionalityId: fWalletManual.id },
           ],
         },
       },
     }));
+
+  await prisma.roleFunctionality.createMany({
+    data: [{ roleId: adminRole.id, functionalityId: fWalletManual.id }],
+    skipDuplicates: true,
+  });
 
   const limitedRole = await prisma.role.create({
     data: {
@@ -106,9 +117,9 @@ export async function createRbacFixture(suffix: string): Promise<RbacFixture> {
     adminUserId: adminUser.id,
     limitedUserId: limitedUser.id,
     bingoOnlyUserId: bingoOnlyUser.id,
-    adminToken: signAccessToken({ sub: adminUser.id, email: adminUser.email }),
-    limitedToken: signAccessToken({ sub: limitedUser.id, email: limitedUser.email }),
-    bingoOnlyToken: signAccessToken({ sub: bingoOnlyUser.id, email: bingoOnlyUser.email }),
+    adminToken: signAccessToken({ sub: adminUser.id, email: adminUser.email, tv: adminUser.tokenVersion }),
+    limitedToken: signAccessToken({ sub: limitedUser.id, email: limitedUser.email, tv: limitedUser.tokenVersion }),
+    bingoOnlyToken: signAccessToken({ sub: bingoOnlyUser.id, email: bingoOnlyUser.email, tv: bingoOnlyUser.tokenVersion }),
   };
 }
 

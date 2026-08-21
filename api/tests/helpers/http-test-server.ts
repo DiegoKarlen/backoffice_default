@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../../src/create-app.js";
+import { shutdownAllLiveSessions } from "../../src/game-engine/bingo/live-session.js";
 
 export type TestHttpServer = {
   baseUrl: string;
@@ -19,10 +20,12 @@ export async function startTestHttpServer(): Promise<TestHttpServer> {
 
   return {
     baseUrl: `http://127.0.0.1:${port}`,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
+    close: async () => {
+      await shutdownAllLiveSessions();
+      await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
-      }),
+      });
+    },
   };
 }
 

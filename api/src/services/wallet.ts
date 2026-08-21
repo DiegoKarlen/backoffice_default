@@ -1,31 +1,40 @@
 import { prisma } from "../lib/prisma.js";
 import { env } from "../config/env.js";
 import { logAdminAudit } from "../lib/admin-audit-log.js";
+import {
+  MANUAL_CREDIT_PROVIDER_ID,
+  manualCreditExternalRef,
+} from "../payments/manual-credit.constants.js";
 import { applyWalletDelta, lockWalletForPlayer } from "./wallet-ledger.js";
 
-function buildManualDepositRef(adminUserId: string, note?: string | null): string {
-  const safeNote = note?.trim() ? encodeURIComponent(note.trim().slice(0, 400)) : "";
-  return `manual-bo|admin=${adminUserId}|note=${safeNote}|ts=${Date.now()}`;
-}
+export const IDEMPOTENCY_KEY_REUSED =
+  "Idempotency key reused with different request parameters";
 
 export type ManualCreditResult = {
   depositId: string;
   transactionId: string;
   walletId: string;
   balanceCents: number;
+  alreadyProcessed?: boolean;
 };
 
 /**
  * Manual credit from backoffice: creates Deposit (COMPLETED), ledger line (DEPOSIT), updates balance.
- * Uses row lock on Wallet (FOR UPDATE) to avoid lost updates under concurrency.
+ * Idempotent per `idempotencyKey` (unique with providerId `manual-bo`).
  */
 export async function creditWalletManualDeposit(params: {
   playerId: string;
   amountCents: number;
   adminUserId: string;
+  idempotencyKey: string;
   note?: string | null;
 }): Promise<ManualCreditResult> {
-  const { playerId, amountCents, adminUserId, note } = params;
+  const { playerId, amountCents, adminUserId, idempotencyKey, note } = params;
+  const externalRef = manualCreditExternalRef(idempotencyKey);
+
+  if (!externalRef) {
+    throw new Error("idempotencyKey is required");
+  }
 
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw new Error("amountCents must be a positive integer");
@@ -46,6 +55,36 @@ export async function creditWalletManualDeposit(params: {
   }
 
   return prisma.$transaction(async (tx) => {
+    const existing = await tx.deposit.findUnique({
+      where: {
+        providerId_externalRef: {
+          providerId: MANUAL_CREDIT_PROVIDER_ID,
+          externalRef,
+        },
+      },
+      include: {
+        walletTransaction: true,
+        player: { include: { wallet: true } },
+      },
+    });
+
+    if (existing) {
+      if (existing.playerId !== playerId || existing.amountCents !== amountCents) {
+        throw new Error(IDEMPOTENCY_KEY_REUSED);
+      }
+      const wallet = existing.player.wallet;
+      if (!wallet || !existing.walletTransaction) {
+        throw new Error("Existing manual credit is incomplete");
+      }
+      return {
+        depositId: existing.id,
+        transactionId: existing.walletTransaction.id,
+        walletId: wallet.id,
+        balanceCents: wallet.balanceCents,
+        alreadyProcessed: true,
+      };
+    }
+
     const wallet = await lockWalletForPlayer(tx, playerId);
     const { newBalanceCents: newBalance } = await applyWalletDelta(tx, wallet, amountCents);
 
@@ -56,7 +95,8 @@ export async function creditWalletManualDeposit(params: {
         currencyCode: wallet.currencyCode,
         status: "COMPLETED",
         completedAt: new Date(),
-        externalRef: buildManualDepositRef(adminUserId, note),
+        providerId: MANUAL_CREDIT_PROVIDER_ID,
+        externalRef,
       },
     });
 
@@ -78,7 +118,7 @@ export async function creditWalletManualDeposit(params: {
       amountCents,
       note,
       depositId: deposit.id,
-      metadata: { transactionId: wt.id, walletId: wallet.id },
+      metadata: { transactionId: wt.id, walletId: wallet.id, idempotencyKey: externalRef },
     });
 
     return {

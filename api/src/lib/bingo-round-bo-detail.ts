@@ -15,10 +15,19 @@ async function assertRoundBelongsToBingo(bingoId: string, roundId: string) {
       id: true,
       sequence: true,
       status: true,
-      bingo: { select: { bingoType: true, name: true } },
+      bingo: { select: { bingoType: true, name: true, drawMode: true } },
     },
   });
   return round;
+}
+
+function redactGridForLiveDraw(grid: CardGridCell[][]): CardGridCell[][] {
+  return grid.map((row) =>
+    row.map((cell) => ({
+      number: cell.isFree ? cell.number : null,
+      isFree: cell.isFree,
+    })),
+  );
 }
 
 export type RoundCardPrizeBo = {
@@ -107,13 +116,18 @@ export async function getRoundPurchasedCardsForBo(params: {
     ok: true,
     bingoType: round.bingo.bingoType,
     roundSequence: round.sequence,
-    roundStatus: round.status,
-    cards: cards.map((c) => ({
-      playerUsername: c.player.username,
-      cardIndex: c.cardIndex,
-      grid: cellsToGrid5(c.cells),
-      prizes: prizesByCardId.get(c.id) ?? [],
-    })),
+      roundStatus: round.status,
+      cardsHiddenDuringLiveDraw: round.status === "DRAWING" && round.bingo.drawMode === "LIVE",
+      cards: cards.map((c) => {
+        const grid = cellsToGrid5(c.cells);
+        const hideNumbers = round.status === "DRAWING" && round.bingo.drawMode === "LIVE";
+        return {
+          playerUsername: c.player.username,
+          cardIndex: c.cardIndex,
+          grid: hideNumbers ? redactGridForLiveDraw(grid) : grid,
+          prizes: prizesByCardId.get(c.id) ?? [],
+        };
+      }),
   };
 }
 

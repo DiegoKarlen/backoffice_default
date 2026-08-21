@@ -3,6 +3,7 @@ import { z } from "zod";
 import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword } from "../lib/password.js";
+import { bumpUserTokenVersion } from "../lib/user-token-version.js";
 import { BO } from "../lib/functionality-codes.js";
 import {
   assertActorCanAssignRoles,
@@ -133,12 +134,17 @@ usersRouter.patch(
       totpSecret?: null;
       totpEnabled?: boolean;
     } = {};
+    let invalidateSessions = false;
     if (displayName !== undefined) data.displayName = displayName;
-    if (active !== undefined) data.active = active;
+    if (active !== undefined) {
+      data.active = active;
+      if (active === false) invalidateSessions = true;
+    }
     if (password) {
       data.passwordHash = await hashPassword(password);
       data.totpSecret = null;
       data.totpEnabled = false;
+      invalidateSessions = true;
     }
 
     await prisma.$transaction(async (tx) => {
@@ -146,6 +152,9 @@ usersRouter.patch(
         where: { id },
         data,
       });
+      if (invalidateSessions) {
+        await bumpUserTokenVersion(id, tx);
+      }
       if (roleIds) {
         await tx.userRole.deleteMany({ where: { userId: id } });
         if (roleIds.length) {

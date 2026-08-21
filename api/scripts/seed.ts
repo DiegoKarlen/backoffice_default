@@ -71,6 +71,15 @@ async function main() {
     },
     update: { name: "Manage players and wallet credits" },
   });
+  const fWalletManual = await prisma.functionality.upsert({
+    where: { code: "bo.wallet.manual-credit" },
+    create: {
+      code: "bo.wallet.manual-credit",
+      name: "Manual wallet credits",
+      module: "game",
+    },
+    update: { name: "Manual wallet credits" },
+  });
   const fPayments = await prisma.functionality.upsert({
     where: { code: "bo.payments.manage" },
     create: {
@@ -122,6 +131,7 @@ async function main() {
             { functionality: { connect: { id: fBingo.id } } },
             { functionality: { connect: { id: fRoom.id } } },
             { functionality: { connect: { id: fPlayers.id } } },
+            { functionality: { connect: { id: fWalletManual.id } } },
             { functionality: { connect: { id: fPayments.id } } },
           ],
         },
@@ -140,6 +150,7 @@ async function main() {
       { roleId: adminRole.id, functionalityId: fBingo.id },
       { roleId: adminRole.id, functionalityId: fRoom.id },
       { roleId: adminRole.id, functionalityId: fPlayers.id },
+      { roleId: adminRole.id, functionalityId: fWalletManual.id },
       { roleId: adminRole.id, functionalityId: fPayments.id },
     ],
     skipDuplicates: true,

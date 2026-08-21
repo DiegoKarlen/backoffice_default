@@ -1,6 +1,11 @@
 import type { Response, NextFunction } from "express";
 import { verifyAccessToken, type AccessPayload } from "../lib/jwt.js";
-import { ACCOUNT_INACTIVE_OR_NOT_FOUND, assertActiveBackofficeUser, assertActivePlayer } from "../lib/auth-revalidation.js";
+import {
+  ACCOUNT_INACTIVE_OR_NOT_FOUND,
+  checkBackofficeSession,
+  checkPlayerSession,
+  SESSION_INVALID,
+} from "../lib/auth-revalidation.js";
 import { asyncHandler } from "./async-handler.js";
 
 export type AuthedRequest = import("express").Request & { auth?: AccessPayload };
@@ -42,9 +47,13 @@ export const requireAuth = asyncHandler(async (req: AuthedRequest, res: Response
     return;
   }
 
-  const active = await assertActiveBackofficeUser(auth.sub);
-  if (!active) {
+  const session = await checkBackofficeSession(auth.sub, auth.tv);
+  if (session === "inactive") {
     res.status(401).json({ error: ACCOUNT_INACTIVE_OR_NOT_FOUND });
+    return;
+  }
+  if (session === "stale_token") {
+    res.status(401).json({ error: SESSION_INVALID });
     return;
   }
 
@@ -73,9 +82,13 @@ export const requirePlayer = asyncHandler(async (req: AuthedRequest, res: Respon
     return;
   }
 
-  const active = await assertActivePlayer(auth.sub);
-  if (!active) {
+  const session = await checkPlayerSession(auth.sub, auth.tv);
+  if (session === "inactive") {
     res.status(401).json({ error: ACCOUNT_INACTIVE_OR_NOT_FOUND });
+    return;
+  }
+  if (session === "stale_token") {
+    res.status(401).json({ error: SESSION_INVALID });
     return;
   }
 

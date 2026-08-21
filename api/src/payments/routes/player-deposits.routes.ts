@@ -26,7 +26,7 @@ const profileSchema = z.object({
 const initiateSchema = z.object({
   amountCents: z.number().int().positive(),
   paymentMethodId: z.string().uuid(),
-  providerId: z.enum(["stub", "mixer-gaming"]).optional(),
+  providerId: z.enum(["mixer-gaming"]).optional(),
   profile: profileSchema.optional(),
 });
 

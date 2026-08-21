@@ -1,6 +1,7 @@
 import type { AdminAuditAction, Prisma } from "@prisma/client";
+import { prisma } from "./prisma.js";
 
-export type AdminAuditTargetType = "player";
+export type AdminAuditTargetType = "player" | "bingo_round" | "room";
 
 export type LogAdminAuditInput = {
   adminUserId: string;
@@ -18,15 +19,25 @@ export async function logAdminAudit(
   input: LogAdminAuditInput,
 ): Promise<void> {
   await tx.adminAuditLog.create({
-    data: {
-      adminUserId: input.adminUserId,
-      action: input.action,
-      targetType: input.targetType,
-      targetId: input.targetId,
-      amountCents: input.amountCents,
-      note: input.note?.trim() || null,
-      depositId: input.depositId,
-      metadata: input.metadata,
-    },
+    data: auditLogData(input),
   });
+}
+
+export async function logAdminAuditRecord(input: LogAdminAuditInput): Promise<void> {
+  await prisma.adminAuditLog.create({
+    data: auditLogData(input),
+  });
+}
+
+function auditLogData(input: LogAdminAuditInput) {
+  return {
+    adminUserId: input.adminUserId,
+    action: input.action,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    amountCents: input.amountCents,
+    note: input.note?.trim() || null,
+    depositId: input.depositId,
+    metadata: input.metadata,
+  };
 }

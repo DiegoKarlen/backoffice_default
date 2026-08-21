@@ -1,4 +1,4 @@
-export type PaymentProviderId = "stub" | "mixer-gaming";
+export type PaymentProviderId = "mixer-gaming";
 
 export type PaymentMethodOption = {
   id: string;

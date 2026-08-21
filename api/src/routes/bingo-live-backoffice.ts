@@ -39,7 +39,7 @@ export function attachBingoLiveBackofficeRoutes(router: Router): void {
         throw zodFlattenError(parsed.error);
       }
       registerLiveSession(room);
-      const result = await registerDrawnBallForRoom(room.id, parsed.data.number);
+      const result = await registerDrawnBallForRoom(room.id, parsed.data.number, req.auth?.sub);
       if (!result.ok) {
         throw httpError(result.status, result.error);
       }
@@ -52,7 +52,7 @@ export function attachBingoLiveBackofficeRoutes(router: Router): void {
     asyncHandler(async (req: AuthedRequest, res) => {
       const room = await requireRoomFromSlugQuery(req);
       const session = await ensureLiveSessionForRoom(room.id);
-      session.requestStop();
+      await session.requestStop(req.auth?.sub);
       res.json({ ok: true });
     }),
   );
