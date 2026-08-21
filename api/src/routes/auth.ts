@@ -6,6 +6,7 @@ import { httpError, zodFlattenError } from "../lib/route-helpers.js";
 import { prisma } from "../lib/prisma.js";
 import { verifyPassword } from "../lib/password.js";
 import { signAccessToken, signTwoFactorPendingToken, verifyAccessToken } from "../lib/jwt.js";
+import { bumpUserTokenVersion } from "../lib/user-token-version.js";
 import { loginRateLimiter } from "../middleware/auth-rate-limit.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
@@ -115,6 +116,7 @@ authRouter.post(
     const token = signAccessToken({
       sub: user.id,
       email: user.email,
+      tv: user.tokenVersion,
     });
 
     res.json({
@@ -166,6 +168,7 @@ authRouter.post(
     const token = signAccessToken({
       sub: user.id,
       email: user.email,
+      tv: user.tokenVersion,
     });
 
     res.json({
@@ -293,6 +296,7 @@ authRouter.post(
       where: { id: user.id },
       data: { totpSecret: null, totpEnabled: false },
     });
+    await bumpUserTokenVersion(user.id);
 
     res.json({ ok: true });
   }),

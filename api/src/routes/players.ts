@@ -14,15 +14,63 @@ import { requireFunctionality } from "../middleware/require-functionality.js";
 
 export const playersRouter = Router();
 
+const manualCreditBodySchema = z.object({
+  amountCents: z.number().int().positive(),
+  idempotencyKey: z.string().uuid(),
+  note: z.string().max(500).optional(),
+});
+
+const uuidParam = z.string().uuid();
+
 playersRouter.use(requireAuth);
+
+playersRouter.post(
+  "/:playerId/wallet/manual-credits",
+  requireFunctionality(BO.WALLET_MANUAL_CREDIT),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const adminUserId = req.auth?.sub;
+    if (!adminUserId) {
+      throw httpError(401, "Unauthorized");
+    }
+
+    const playerId = req.params.playerId;
+    if (!uuidParam.safeParse(playerId).success) {
+      throw httpError(400, "Invalid player id");
+    }
+
+    const parsed = manualCreditBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
+    }
+
+    try {
+      const result = await creditWalletManualDeposit({
+        playerId,
+        amountCents: parsed.data.amountCents,
+        adminUserId,
+        idempotencyKey: parsed.data.idempotencyKey,
+        note: parsed.data.note,
+      });
+
+      res.status(result.alreadyProcessed ? 200 : 201).json({
+        depositId: result.depositId,
+        transactionId: result.transactionId,
+        walletId: result.walletId,
+        balanceCents: result.balanceCents,
+        ...(result.alreadyProcessed ? { alreadyProcessed: true } : {}),
+      });
+    } catch (e) {
+      rethrowPlayerWalletError(e);
+    }
+  }),
+);
+
 playersRouter.use(requireFunctionality(BO.PLAYERS_MANAGE));
 
 const listQuerySchema = z.object({
   q: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
-
-const uuidParam = z.string().uuid();
 
 playersRouter.get(
   "/",
@@ -305,49 +353,6 @@ playersRouter.post(
         playerRoundCardId: parsed.data.playerRoundCardId,
       });
       res.status(201).json(result);
-    } catch (e) {
-      rethrowPlayerWalletError(e);
-    }
-  }),
-);
-
-const manualCreditBodySchema = z.object({
-  amountCents: z.number().int().positive(),
-  note: z.string().max(500).optional(),
-});
-
-playersRouter.post(
-  "/:playerId/wallet/manual-credits",
-  asyncHandler(async (req: AuthedRequest, res) => {
-    const adminUserId = req.auth?.sub;
-    if (!adminUserId) {
-      throw httpError(401, "Unauthorized");
-    }
-
-    const playerId = req.params.playerId;
-    if (!uuidParam.safeParse(playerId).success) {
-      throw httpError(400, "Invalid player id");
-    }
-
-    const parsed = manualCreditBodySchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw zodFlattenError(parsed.error);
-    }
-
-    try {
-      const result = await creditWalletManualDeposit({
-        playerId,
-        amountCents: parsed.data.amountCents,
-        adminUserId,
-        note: parsed.data.note,
-      });
-
-      res.status(201).json({
-        depositId: result.depositId,
-        transactionId: result.transactionId,
-        walletId: result.walletId,
-        balanceCents: result.balanceCents,
-      });
     } catch (e) {
       rethrowPlayerWalletError(e);
     }

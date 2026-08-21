@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import { prisma } from "../../../src/lib/prisma.js";
 import { env } from "../../../src/config/env.js";
@@ -30,7 +31,10 @@ describe("[integration][security] manual wallet credits", () => {
       const res = await apiFetch(http.baseUrl, "/backoffice/players/00000000-0000-4000-8000-000000000001/wallet/manual-credits", {
         method: "POST",
         token: fx.adminToken,
-        body: JSON.stringify({ amountCents: env.maxManualCreditCents + 1 }),
+        body: JSON.stringify({
+          amountCents: env.maxManualCreditCents + 1,
+          idempotencyKey: randomUUID(),
+        }),
       });
       assert.equal(res.status, 400);
       const body = (await res.json()) as { error?: string };
@@ -59,7 +63,11 @@ describe("[integration][security] manual wallet credits", () => {
       const res = await apiFetch(http.baseUrl, `/backoffice/players/${player.id}/wallet/manual-credits`, {
         method: "POST",
         token: fx.adminToken,
-        body: JSON.stringify({ amountCents: 2_500, note: "QA manual credit" }),
+        body: JSON.stringify({
+          amountCents: 2_500,
+          note: "QA manual credit",
+          idempotencyKey: randomUUID(),
+        }),
       });
       assert.equal(res.status, 201);
       const body = (await res.json()) as { depositId?: string; balanceCents?: number };
@@ -78,6 +86,70 @@ describe("[integration][security] manual wallet credits", () => {
       assert.ok(audit);
       assert.equal(audit!.amountCents, 2_500);
       assert.equal(audit!.note, "QA manual credit");
+    } finally {
+      const deposits = await prisma.deposit.findMany({ where: { playerId: player.id } });
+      for (const d of deposits) {
+        await prisma.adminAuditLog.deleteMany({ where: { depositId: d.id } });
+        await prisma.walletTransaction.deleteMany({ where: { depositId: d.id } });
+        await prisma.deposit.delete({ where: { id: d.id } });
+      }
+      await prisma.wallet.deleteMany({ where: { playerId: player.id } });
+      await prisma.player.delete({ where: { id: player.id } });
+      await cleanupRbacFixture(fx);
+    }
+  });
+
+  it("replay with same idempotencyKey is idempotent (single wallet credit)", async (t) => {
+    if (skipIfNoDatabase(t, db) || !http) return;
+    const fx = await createRbacFixture(`mc-idem-${Date.now()}`);
+    const passwordHash = await hashPassword("TestPass123!");
+    const idempotencyKey = randomUUID();
+
+    const player = await prisma.player.create({
+      data: {
+        email: `mc-idem-${fx.suffix}@test.local`,
+        username: `mc_idem_${fx.suffix}`,
+        passwordHash,
+        wallet: { create: { balanceCents: 0, currencyCode: "ARS" } },
+      },
+    });
+
+    const bodyPayload = {
+      amountCents: 3_000,
+      note: "idem test",
+      idempotencyKey,
+    };
+
+    try {
+      const first = await apiFetch(http.baseUrl, `/backoffice/players/${player.id}/wallet/manual-credits`, {
+        method: "POST",
+        token: fx.adminToken,
+        body: JSON.stringify(bodyPayload),
+      });
+      assert.equal(first.status, 201);
+      const firstJson = (await first.json()) as { depositId?: string; balanceCents?: number };
+      assert.equal(firstJson.balanceCents, 3_000);
+
+      const second = await apiFetch(http.baseUrl, `/backoffice/players/${player.id}/wallet/manual-credits`, {
+        method: "POST",
+        token: fx.adminToken,
+        body: JSON.stringify(bodyPayload),
+      });
+      assert.equal(second.status, 200);
+      const secondJson = (await second.json()) as {
+        depositId?: string;
+        balanceCents?: number;
+        alreadyProcessed?: boolean;
+      };
+      assert.equal(secondJson.depositId, firstJson.depositId);
+      assert.equal(secondJson.alreadyProcessed, true);
+      assert.equal(secondJson.balanceCents, 3_000);
+
+      const wallet = await prisma.wallet.findUnique({ where: { playerId: player.id } });
+      assert.equal(wallet!.balanceCents, 3_000);
+
+      const txCount = await prisma.walletTransaction.count({ where: { deposit: { playerId: player.id } } });
+      assert.equal(txCount, 1);
     } finally {
       const deposits = await prisma.deposit.findMany({ where: { playerId: player.id } });
       for (const d of deposits) {

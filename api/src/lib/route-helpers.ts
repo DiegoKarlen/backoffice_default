@@ -40,7 +40,8 @@ export function rethrowPlayerWalletError(e: unknown): never {
     msg === PLAYER_INACTIVE ||
     msg.includes("does not belong") ||
     msg.includes("does not match") ||
-    msg === "Prize already credited for this card"
+    msg === "Prize already credited for this card" ||
+    msg.includes("Idempotency key reused")
   ) {
     throw httpError(409, msg);
   }

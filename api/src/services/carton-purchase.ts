@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { allocateWithUniqueFingerprint } from "../lib/allocate-unique-fingerprint.js";
-import { isRoundOpenForPurchase } from "../lib/bingo-round-kickoff.js";
+import { isRoundOpenForPurchase, lockBingoRoundForPurchase } from "../lib/bingo-round-kickoff.js";
 import { prisma } from "../lib/prisma.js";
 import { applyWalletDelta, lockWalletForPlayer } from "./wallet-ledger.js";
 import { decimalPriceToCents } from "../lib/money.js";
@@ -56,6 +56,18 @@ export async function purchaseCartonsForRound(params: {
   const totalCents = unitPriceCents * quantity;
 
   return prisma.$transaction(async (tx) => {
+    const lockedRound = await lockBingoRoundForPurchase(tx, bingoRoundId);
+
+    if (lockedRound.bingo.status !== "ACTIVE") {
+      throw new Error("Bingo is not active");
+    }
+    if (!isRoundOpenForPurchase(lockedRound)) {
+      throw new Error("Round is not open for purchases");
+    }
+    if (lockedRound.bingo.bingoType !== "BINGO_75") {
+      throw new Error("Only BINGO_75 carton purchase is implemented");
+    }
+
     const wallet = await lockWalletForPlayer(tx, playerId);
 
     if (wallet.balanceCents < totalCents) {

@@ -21,6 +21,8 @@ model User {
   totpSecret   String?
   /// When true, login requires a valid TOTP after password (`totpSecret` must be set).
   totpEnabled  Boolean    @default(false)
+  /// Incremented to invalidate outstanding backoffice JWTs (password change, deactivation, etc.).
+  tokenVersion Int        @default(0)
   roles        UserRole[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -220,6 +222,7 @@ model BingoRoundBall {
   number    Int
 
   @@unique([roundId, drawOrder])
+  @@unique([roundId, number])
   @@index([roundId])
 }
 
@@ -261,7 +264,9 @@ model Player {
   email           String    @unique
   username        String    @unique
   passwordHash    String
-  active          Boolean   @default(true)
+  active           Boolean   @default(true)
+  /// Incremented to invalidate outstanding player JWTs (password change, deactivation, etc.).
+  tokenVersion     Int       @default(0)
   emailVerifiedAt DateTime?
   lastLoginAt     DateTime?
   /// ID numérico estable para gateways de pago (MixerGaming `user_id`).
@@ -470,6 +475,8 @@ model PrizePayout {
 
 enum AdminAuditAction {
   MANUAL_WALLET_CREDIT
+  BALL_DRAWN
+  ROUND_STOPPED
 }
 
 /// Backoffice admin actions audit trail (manual credits, etc.).

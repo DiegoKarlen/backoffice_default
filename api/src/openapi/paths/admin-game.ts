@@ -236,7 +236,7 @@ export const adminGamePaths: OpenAPIV3.PathsObject = {
       tags: ["Jugadores"],
       summary: "Crédito manual al wallet",
       description:
-        "Acredita saldo al jugador de forma manual (ajuste operativo, bonificación, etc.). Registra al admin en `AdminAuditLog` y respeta `MAX_MANUAL_CREDIT_CENTS`. Requiere `bo.players.manage`.",
+        "Acredita saldo al jugador de forma manual (ajuste operativo, bonificación, etc.). Registra al admin en `AdminAuditLog`, respeta `MAX_MANUAL_CREDIT_CENTS` y es idempotente por `idempotencyKey`. Requiere `bo.wallet.manual-credit`.",
       security: backofficeSec,
       parameters: [uuidPath("playerId", "ID del jugador.")],
       requestBody: {
@@ -247,7 +247,7 @@ export const adminGamePaths: OpenAPIV3.PathsObject = {
           },
         },
       },
-      responses: { "201": { description: "Saldo acreditado." }, ...stdErrorResponses },
+      responses: { "201": { description: "Saldo acreditado." }, "200": { description: "Reintento idempotente (ya procesado)." }, ...stdErrorResponses },
     },
   },
   "/backoffice/players/{playerId}/prize-credits": {

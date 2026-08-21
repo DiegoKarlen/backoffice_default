@@ -109,4 +109,68 @@ describe("[integration][security] auth boundaries", () => {
       await prisma.player.delete({ where: { id: player.id } });
     }
   });
+
+  it("password change invalidates existing backoffice JWT (tokenVersion)", async (t) => {
+    if (skipIfNoDatabase(t, db) || !http) return;
+    const fx = await createRbacFixture(`auth-tv-${Date.now()}`);
+    try {
+      const ok = await apiFetch(http.baseUrl, "/auth/me", { token: fx.adminToken });
+      assert.equal(ok.status, 200);
+
+      const patch = await apiFetch(http.baseUrl, `/users/${fx.adminUserId}`, {
+        method: "PATCH",
+        token: fx.adminToken,
+        body: JSON.stringify({ password: "NewSecurePass123!" }),
+      });
+      assert.equal(patch.status, 200);
+
+      const stale = await apiFetch(http.baseUrl, "/auth/me", { token: fx.adminToken });
+      assert.equal(stale.status, 401);
+      const body = (await stale.json()) as { error?: string };
+      assert.match(body.error ?? "", /invalid or expired token/i);
+    } finally {
+      await cleanupRbacFixture(fx);
+    }
+  });
+
+  it("legacy JWT without tv is rejected after tokenVersion bump", async (t) => {
+    if (skipIfNoDatabase(t, db) || !http) return;
+    const fx = await createRbacFixture(`auth-tv-legacy-${Date.now()}`);
+    const legacyToken = signAccessToken({ sub: fx.adminUserId, email: `rbac-admin-${fx.suffix}@test.local`, tv: 0 });
+    try {
+      await prisma.user.update({
+        where: { id: fx.adminUserId },
+        data: { tokenVersion: { increment: 1 } },
+      });
+
+      const res = await apiFetch(http.baseUrl, "/auth/me", { token: legacyToken });
+      assert.equal(res.status, 401);
+    } finally {
+      await cleanupRbacFixture(fx);
+    }
+  });
+
+  it("legacy player JWT without tv is rejected after tokenVersion bump", async (t) => {
+    if (skipIfNoDatabase(t, db) || !http) return;
+    const suffix = `auth-pl-tv-${Date.now()}`;
+    const player = await prisma.player.create({
+      data: {
+        email: `auth-pl-tv-${suffix}@test.local`,
+        username: `auth_pl_tv_${suffix}`,
+        passwordHash: await hashPassword("TestPass123!"),
+      },
+    });
+    const legacyToken = signPlayerAccessToken({ sub: player.id, email: player.email, tv: 0 });
+    try {
+      await prisma.player.update({
+        where: { id: player.id },
+        data: { tokenVersion: { increment: 1 } },
+      });
+
+      const res = await apiFetch(http.baseUrl, "/player/wallet", { token: legacyToken });
+      assert.equal(res.status, 401);
+    } finally {
+      await prisma.player.delete({ where: { id: player.id } });
+    }
+  });
 });

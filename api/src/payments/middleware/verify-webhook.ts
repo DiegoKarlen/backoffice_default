@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
 import rateLimit from "express-rate-limit";
-import { timingSafeEqual } from "node:crypto";
 import { logInfo, logWarn } from "../../lib/logger.js";
 import type { TrafficLoggedRequest } from "../../lib/http-traffic-log.js";
 import {
@@ -10,10 +9,8 @@ import {
 } from "../providers/mixer-gaming/webhook-signature.js";
 import { paymentsEnv, type PaymentsProviderId } from "../config.js";
 
-export const WEBHOOK_SECRET_HEADER = "x-webhook-secret";
-
 function normalizeProviderId(raw: string): PaymentsProviderId | null {
-  if (raw === "stub" || raw === "mixer-gaming") return raw;
+  if (raw === "mixer-gaming") return raw;
   return null;
 }
 
@@ -24,20 +21,8 @@ function headerValue(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-function headerSecret(req: Request): string | undefined {
-  return headerValue(req, WEBHOOK_SECRET_HEADER);
-}
-
 function headerMixerSignature(req: Request): string | undefined {
   return headerValue(req, MIXER_WEBHOOK_SIGNATURE_HEADER);
-}
-
-function secretsMatch(provided: string | undefined, expected: string | undefined): boolean {
-  if (!provided || !expected) return false;
-  const a = Buffer.from(provided, "utf8");
-  const b = Buffer.from(expected, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
 }
 
 export function logWebhookAuthFailure(
@@ -60,33 +45,12 @@ function logWebhookAuthSuccess(req: Request, providerId: PaymentsProviderId): vo
     providerId,
     ip: req.ip,
     path: req.originalUrl,
-    auth:
-      providerId === "stub"
-        ? { type: "shared-secret", header: WEBHOOK_SECRET_HEADER }
-        : {
-            type: "hmac",
-            header: MIXER_WEBHOOK_SIGNATURE_HEADER,
-            signatureLen: headerMixerSignature(req)?.length ?? 0,
-          },
+    auth: {
+      type: "hmac",
+      header: MIXER_WEBHOOK_SIGNATURE_HEADER,
+      signatureLen: headerMixerSignature(req)?.length ?? 0,
+    },
   });
-}
-
-/** Validates shared-secret header for stub webhooks (dev/test only). */
-export function assertStubWebhookAuthorized(req: Request): void {
-  if (paymentsEnv.isProduction || !paymentsEnv.webhookStubEnabled) {
-    logWebhookAuthFailure(req, "stub", "stub_webhooks_disabled");
-    const err = new Error("stub_webhooks_disabled");
-    (err as Error & { status: number }).status = 404;
-    throw err;
-  }
-
-  const provided = headerSecret(req);
-  if (!secretsMatch(provided, paymentsEnv.webhookStubSecret)) {
-    logWebhookAuthFailure(req, "stub", "invalid_or_missing_secret");
-    const err = new Error("Unauthorized webhook");
-    (err as Error & { status: number }).status = 401;
-    throw err;
-  }
 }
 
 /**
@@ -137,9 +101,11 @@ export function assertMixerWebhookAuthorized(req: Request): void {
 }
 
 export function assertPaymentWebhookAuthorized(req: Request, providerId: PaymentsProviderId): void {
-  if (providerId === "stub") {
-    assertStubWebhookAuthorized(req);
-    return;
+  if (providerId !== "mixer-gaming") {
+    logWebhookAuthFailure(req, providerId, "unknown_provider");
+    const err = new Error("Unknown payment provider webhook");
+    (err as Error & { status: number }).status = 404;
+    throw err;
   }
   assertMixerWebhookAuthorized(req);
 }

@@ -64,3 +64,17 @@ export async function refundCartonPurchasesForCancelledRound(
     return { refundedPurchases, totalCentsRefunded, skippedAlreadyRefunded };
   });
 }
+
+/** Removes deferred wins for a cancelled round that were never settled to wallet. */
+export async function deleteUnsettledDeferredWinsForRound(bingoRoundId: string): Promise<number> {
+  const result = await prisma.$executeRaw`
+    DELETE FROM "DeferredRoundPrizeWin" d
+    WHERE d."bingoRoundId" = ${bingoRoundId}
+    AND NOT EXISTS (
+      SELECT 1 FROM "PrizePayout" p
+      WHERE p."playerRoundCardId" = d."playerRoundCardId"
+        AND p."bingoPrizeId" = d."bingoPrizeId"
+    )
+  `;
+  return typeof result === "number" ? result : 0;
+}

@@ -29,7 +29,7 @@ describe("[integration][security] RBAC HTTP and anti-escalation", () => {
       const res = await apiFetch(http.baseUrl, "/backoffice/players/00000000-0000-4000-8000-000000000001/wallet/manual-credits", {
         method: "POST",
         token: fx.limitedToken,
-        body: JSON.stringify({ amountCents: 100 }),
+        body: JSON.stringify({ amountCents: 100, idempotencyKey: "550e8400-e29b-41d4-a716-446655440001" }),
       });
       assert.equal(res.status, 403);
       const body = (await res.json()) as { error?: string };

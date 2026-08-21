@@ -3,16 +3,23 @@ import {
   BingoDrawMode,
   BingoPrizeMode,
   BingoRoundStatus,
+  Prisma,
   type BingoFigure,
   type BingoType,
 } from "@prisma/client";
 import { computePrizePayoutCents, computeRoundPrizePoolCents } from "../../lib/bingo-prize-pool.js";
+import { logAdminAuditRecord } from "../../lib/admin-audit-log.js";
 import { prisma } from "../../lib/prisma.js";
 import { BingoRoundCancelReason } from "../../lib/bingo-round-cancellation.js";
-import { settleDeferredSplitPrizesForRound } from "../../services/settle-deferred-split-prizes.js";
+import { finalizeBingoRoundAfterDraw } from "../../lib/finalize-bingo-round.js";
+import {
+  deleteUnsettledDeferredWinsForRound,
+  refundCartonPurchasesForCancelledRound,
+} from "../../services/round-cancellation-refund.js";
 import { ballCountForType, getBingoEngine } from "./registry.js";
 import { liveSessionStore } from "./live-session-registry.js";
 import { LiveSessionBroadcaster } from "./live-broadcast.js";
+import { LiveDrawMutex } from "./live-draw-mutex.js";
 import { drawIntervalMs, ROUND_INTRO_MS } from "./live-session-config.js";
 import type { LiveSessionPhase, LiveSnapshot, ScheduledDrawingRound } from "./live-session-types.js";
 import { BingoLiveScheduler, type LiveSchedulerHost } from "./live-scheduler.js";
@@ -39,6 +46,10 @@ export class BingoLiveSession implements LiveSchedulerHost {
   private currentRoundId: string | null = null;
   private currentRoundSequence: number | null = null;
   private roundPoolCents = 0;
+
+  private readonly drawMutex = new LiveDrawMutex();
+  private drawInFlight: Promise<void> | null = null;
+  private stopping = false;
 
   private readonly broadcaster = new LiveSessionBroadcaster();
   private readonly scheduler: BingoLiveScheduler;
@@ -248,25 +259,11 @@ export class BingoLiveSession implements LiveSchedulerHost {
     void (async () => {
       try {
         if (finishedRoundId) {
-          await settleDeferredSplitPrizesForRound({ bingoRoundId: finishedRoundId });
-        }
-        if (finishedRoundId) {
-          await prisma.bingoRound.update({
-            where: { id: finishedRoundId },
-            data: { status: BingoRoundStatus.COMPLETED },
-          });
+          await finalizeBingoRoundAfterDraw(finishedRoundId);
         }
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.error("[live-session] finalize round (settle + COMPLETED) failed", e);
-        if (finishedRoundId) {
-          await prisma.bingoRound
-            .update({
-              where: { id: finishedRoundId },
-              data: { status: BingoRoundStatus.COMPLETED },
-            })
-            .catch(() => {});
-        }
+        console.error("[live-session] finalize round failed; round left unsettled", finishedRoundId, e);
       }
 
       this.broadcast("round_end", {
@@ -286,43 +283,62 @@ export class BingoLiveSession implements LiveSchedulerHost {
   }
 
   private async commitDrawnBall(ball: number): Promise<void> {
-    if (this.phase !== "drawing" || !this.bingoType) return;
-    this.drawn.push(ball);
-    const rid = this.currentRoundId;
-    if (rid) {
-      await prisma.bingoRoundBall
-        .create({
+    const run = this.drawMutex.runExclusive(async () => {
+      if (this.stopping || this.phase !== "drawing" || !this.bingoType) return;
+      const rid = this.currentRoundId;
+      if (!rid) return;
+
+      if (this.drawn.includes(ball)) {
+        throw new Error("Ball already drawn");
+      }
+
+      const drawOrder = this.drawn.length + 1;
+      try {
+        await prisma.bingoRoundBall.create({
           data: {
             roundId: rid,
-            drawOrder: this.drawn.length,
+            drawOrder,
             number: ball,
           },
-        })
-        .catch(console.error);
-    }
-    await this.refreshRoundPoolCents();
-    this.broadcaster.broadcastBallDrawn(ball, {
-      ball,
-      drawn: [...this.drawn],
-      remainingInQueue:
-        this.drawMode === BingoDrawMode.VIRTUAL
-          ? this.queue.length
-          : this.remainingBallNumbersForSnapshot().length,
-      bingoId: this.bingoId,
-      name: this.displayLine,
-      bingoType: this.bingoType,
-    });
-    this.broadcast("state", this.getSnapshot());
+        });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+          throw new Error("Ball already drawn");
+        }
+        throw e;
+      }
 
-    const btype = this.bingoType;
-    if (rid && this.bingoId) {
-      await this.afterBall({
+      this.drawn.push(ball);
+      await this.refreshRoundPoolCents();
+      this.broadcaster.broadcastBallDrawn(ball, {
+        ball,
+        drawn: [...this.drawn],
+        remainingInQueue:
+          this.drawMode === BingoDrawMode.VIRTUAL
+            ? this.queue.length
+            : this.remainingBallNumbersForSnapshot().length,
         bingoId: this.bingoId,
-        roundIdSnapshot: rid,
-        drawnSnapshot: [...this.drawn],
-        bingoType: btype,
+        name: this.displayLine,
+        bingoType: this.bingoType,
       });
-    }
+      this.broadcast("state", this.getSnapshot());
+
+      const btype = this.bingoType;
+      if (this.bingoId) {
+        await this.afterBall({
+          bingoId: this.bingoId,
+          roundIdSnapshot: rid,
+          drawnSnapshot: [...this.drawn],
+          bingoType: btype,
+        });
+      }
+    });
+
+    this.drawInFlight = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    await run;
   }
 
   private tickDraw(): void {
@@ -343,7 +359,13 @@ export class BingoLiveSession implements LiveSchedulerHost {
   }
 
   /** Operador en display (bingo Live): registra la bola que salió en el video. */
-  async registerDrawnBall(ballNumber: number): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  async registerDrawnBall(
+    ballNumber: number,
+    adminUserId?: string,
+  ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (this.stopping) {
+      return { ok: false, status: 409, error: "La partida está deteniéndose." };
+    }
     if (this.phase !== "drawing") {
       return { ok: false, status: 409, error: "La partida ya finalizó; no se pueden marcar más bolas." };
     }
@@ -371,7 +393,26 @@ export class BingoLiveSession implements LiveSchedulerHost {
     if (this.drawn.includes(ballNumber)) {
       return { ok: false, status: 409, error: "Ball already drawn" };
     }
-    await this.commitDrawnBall(ballNumber);
+    try {
+      await this.commitDrawnBall(ballNumber);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "Ball already drawn") {
+        return { ok: false, status: 409, error: msg };
+      }
+      throw e;
+    }
+
+    if (adminUserId) {
+      await logAdminAuditRecord({
+        adminUserId,
+        action: "BALL_DRAWN",
+        targetType: "bingo_round",
+        targetId: roundId,
+        metadata: { ballNumber, roomId: this.roomId, roomSlug: this.roomSlug },
+      });
+    }
+
     return { ok: true };
   }
 
@@ -436,23 +477,49 @@ export class BingoLiveSession implements LiveSchedulerHost {
     this.scheduler.refreshIdleSchedule();
   }
 
-  requestStop(): void {
+  async requestStop(adminUserId?: string): Promise<void> {
+    if (this.stopping) return;
+    this.stopping = true;
+    this.clearTimers();
+
     const rid = this.currentRoundId;
-    if (rid && this.phase === "drawing") {
-      void prisma.deferredRoundPrizeWin
-        .deleteMany({ where: { bingoRoundId: rid } })
-        .catch((err) => console.error("[live-session] delete deferred wins on manual stop", err));
-      void prisma.bingoRound
-        .update({
+    const wasDrawing = Boolean(rid && this.phase === "drawing");
+
+    if (this.drawInFlight) {
+      await this.drawInFlight.catch(() => {});
+    }
+
+    let refundSummary: Awaited<ReturnType<typeof refundCartonPurchasesForCancelledRound>> | null = null;
+    if (wasDrawing && rid) {
+      try {
+        refundSummary = await refundCartonPurchasesForCancelledRound(rid);
+        await deleteUnsettledDeferredWinsForRound(rid);
+        await prisma.bingoRound.update({
           where: { id: rid },
           data: {
             status: BingoRoundStatus.CANCELLED,
             cancellationReason: BingoRoundCancelReason.MANUAL_STOP,
           },
-        })
-        .catch(console.error);
+        });
+        if (adminUserId) {
+          await logAdminAuditRecord({
+            adminUserId,
+            action: "ROUND_STOPPED",
+            targetType: "bingo_round",
+            targetId: rid,
+            metadata: {
+              roomId: this.roomId,
+              roomSlug: this.roomSlug,
+              refund: refundSummary,
+            },
+          });
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[live-session] manual stop finalize failed", e);
+      }
     }
-    this.clearTimers();
+
     this.phase = "idle";
     this.scheduler.resetScheduleState();
     this.currentRoundId = null;
@@ -467,6 +534,7 @@ export class BingoLiveSession implements LiveSchedulerHost {
     this.jackpotMaxBall = null;
     this.queue = [];
     this.drawn = [];
+    this.stopping = false;
     this.broadcast("idle", { message: "Sesión detenida manualmente" });
     this.broadcast("state", this.getSnapshot());
   }
@@ -506,12 +574,18 @@ export function rescheduleLiveSessionForRoom(roomId: string): void {
 export async function registerDrawnBallForRoom(
   roomId: string,
   ballNumber: number,
+  adminUserId?: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const session = liveSessionStore.get(roomId);
   if (!session) {
     return { ok: false, status: 404, error: "Live session not found for room" };
   }
-  return session.registerDrawnBall(ballNumber);
+  return session.registerDrawnBall(ballNumber, adminUserId);
+}
+
+/** Stops timers and clears in-memory sessions (integration tests / graceful shutdown). */
+export async function shutdownAllLiveSessions(): Promise<void> {
+  await liveSessionStore.shutdownAll();
 }
 
 export { liveSessionStore, type LiveSessionStore } from "./live-session-registry.js";

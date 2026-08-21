@@ -10,6 +10,7 @@ export type LiveSessionRoomRef = {
 export interface LiveSessionStore {
   get(roomId: string): BingoLiveSession | undefined;
   set(roomId: string, session: BingoLiveSession): void;
+  shutdownAll(): Promise<void>;
 }
 
 class InMemoryLiveSessionStore implements LiveSessionStore {
@@ -21,6 +22,12 @@ class InMemoryLiveSessionStore implements LiveSessionStore {
 
   set(roomId: string, session: BingoLiveSession): void {
     this.sessions.set(roomId, session);
+  }
+
+  async shutdownAll(): Promise<void> {
+    const stops = [...this.sessions.values()].map((session) => session.requestStop());
+    await Promise.all(stops);
+    this.sessions.clear();
   }
 }
 

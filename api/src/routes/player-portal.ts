@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { listWalletTransactionsForPlayer, parseOptionalType } from "../lib/wallet-transactions-for-player.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { signPlayerAccessToken } from "../lib/jwt.js";
+import { bumpPlayerTokenVersion } from "../lib/player-token-version.js";
 import { loginRateLimiter } from "../middleware/auth-rate-limit.js";
 import { requirePlayer, type AuthedRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/async-handler.js";
@@ -22,6 +23,11 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
 });
 
 function requirePlayerId(req: AuthedRequest): string {
@@ -63,7 +69,11 @@ playerPortalRouter.post(
       return p;
     });
 
-    const token = signPlayerAccessToken({ sub: player.id, email: player.email });
+    const token = signPlayerAccessToken({
+      sub: player.id,
+      email: player.email,
+      tv: player.tokenVersion,
+    });
 
     res.status(201).json({
       accessToken: token,
@@ -88,12 +98,19 @@ playerPortalRouter.post(
     }
     const email = parsed.data.email.trim().toLowerCase();
 
-    const player = await prisma.player.findFirst({ where: { email, active: true } });
+    const player = await prisma.player.findFirst({
+      where: { email, active: true },
+      select: { id: true, email: true, username: true, passwordHash: true, tokenVersion: true },
+    });
     if (!player || !(await verifyPassword(parsed.data.password, player.passwordHash))) {
       throw httpError(401, "Invalid credentials");
     }
 
-    const token = signPlayerAccessToken({ sub: player.id, email: player.email });
+    const token = signPlayerAccessToken({
+      sub: player.id,
+      email: player.email,
+      tv: player.tokenVersion,
+    });
 
     res.json({
       accessToken: token,
@@ -105,6 +122,37 @@ playerPortalRouter.post(
         username: player.username,
       },
     });
+  }),
+);
+
+playerPortalRouter.post(
+  "/change-password",
+  requirePlayer,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const sub = requirePlayerId(req);
+    const parsed = changePasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw zodFlattenError(parsed.error);
+    }
+
+    const player = await prisma.player.findFirst({
+      where: { id: sub, active: true },
+      select: { id: true, passwordHash: true },
+    });
+    if (!player || !(await verifyPassword(parsed.data.currentPassword, player.passwordHash))) {
+      throw httpError(401, "Invalid credentials");
+    }
+
+    const passwordHash = await hashPassword(parsed.data.newPassword);
+    await prisma.$transaction(async (tx) => {
+      await tx.player.update({
+        where: { id: player.id },
+        data: { passwordHash },
+      });
+      await bumpPlayerTokenVersion(player.id, tx);
+    });
+
+    res.json({ ok: true });
   }),
 );
 

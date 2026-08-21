@@ -333,6 +333,8 @@ function showCreditPanel(playerLabel, playerId) {
   const note = /** @type {HTMLTextAreaElement | null} */ (document.getElementById("bo-player-credit-note"));
   if (amt) amt.value = "";
   if (note) note.value = "";
+  const creditForm = document.getElementById("bo-player-credit-form");
+  if (creditForm) delete creditForm.dataset.idempotencyKey;
   applyDomI18n(panel);
 }
 
@@ -735,10 +737,17 @@ export async function initPlayersPage() {
         return;
       }
       try {
+        let idempotencyKey = creditForm.dataset.idempotencyKey;
+        if (!idempotencyKey) {
+          idempotencyKey = crypto.randomUUID();
+          creditForm.dataset.idempotencyKey = idempotencyKey;
+        }
         await api.players.manualCredit(playerId, {
           amountCents,
+          idempotencyKey,
           note: note || undefined,
         });
+        delete creditForm.dataset.idempotencyKey;
         showToast(msg, t("players.msgCredited"), false);
         const q = document.getElementById("players-filter-q")?.value?.trim() ?? "";
         await renderPlayersTable(tbody, q);

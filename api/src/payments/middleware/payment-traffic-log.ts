@@ -1,9 +1,7 @@
 import { createHttpTrafficLogger } from "../../lib/http-traffic-log.js";
 import { MIXER_WEBHOOK_SIGNATURE_HEADER } from "../providers/mixer-gaming/webhook-signature.js";
-import { WEBHOOK_SECRET_HEADER } from "./verify-webhook.js";
 
 const SENSITIVE_HEADERS = new Set([
-  WEBHOOK_SECRET_HEADER,
   MIXER_WEBHOOK_SIGNATURE_HEADER,
   "authorization",
   "cookie",
@@ -16,7 +14,6 @@ function redactHeaderValue(name: string, value: string): string {
     if (v.length <= 16) return `[len=${v.length}]`;
     return `${v.slice(0, 8)}…${v.slice(-8)} [len=${v.length}]`;
   }
-  if (lower === WEBHOOK_SECRET_HEADER) return "[redacted]";
   if (lower === "authorization") return "[redacted]";
   return value;
 }
@@ -27,7 +24,7 @@ function sanitizeWebhookHeaders(
   const out: Record<string, unknown> = {};
   for (const [name, raw] of Object.entries(headers)) {
     const lower = name.toLowerCase();
-    if (!SENSITIVE_HEADERS.has(lower) && lower !== "x-webhook-secret") continue;
+    if (!SENSITIVE_HEADERS.has(lower)) continue;
     const value = Array.isArray(raw) ? raw[0] : raw;
     if (typeof value === "string" && value.trim()) {
       out[lower] = redactHeaderValue(lower, value);
